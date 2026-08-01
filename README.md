@@ -122,6 +122,34 @@ match the ids `--engine` takes, so there is one name per thing.
 
 Weights, fixtures and virtualenvs are not tracked; `docs/setup.md` regenerates them.
 
+## Licensing
+
+This repository is Apache-2.0 ([LICENSE](LICENSE)). It contains **no model weights** — you
+download those yourself, and they carry their own terms:
+
+| | licence | note |
+|---|---|---|
+| Audio8-TTS-Preview-0.6b | Apache-2.0 | from the model card on Hugging Face |
+| Fun-CosyVoice3-0.5B | Apache-2.0 (upstream CosyVoice) | check the model card before redistributing — model weights and code can differ |
+
+The voice assets in `voices/` are derived from reference audio shipped with those models,
+so the same terms reach them.
+
+## Running without a GPU
+
+`--no-default-features` drops the Metal kernels and builds a portable CPU-only binary; it
+is also the only configuration that builds off Apple platforms, since candle's `metal`
+feature does not exist there.
+
+```sh
+cargo run -p tts-cli --release --no-default-features -- speak --cpu \
+    --engine audio8 --voice voices/cosy-default --text "Hello." --out hello.wav
+```
+
+Correctness is unchanged — the custom kernels each carry a CPU fallback that the unit
+tests check them against. Speed is not: Audio8 measures **RTF 3.39** on CPU against 0.499
+on Metal, so treat CPU as a portability guarantee rather than a deployment target.
+
 ## Three things a reader should know up front
 
 **Audio8's reference sampler is broken under its own default dtype.** `_sample` draws its

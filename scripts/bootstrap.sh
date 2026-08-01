@@ -39,11 +39,23 @@ elif [ "$(uname -m)" != "arm64" ]; then
   warn "Not Apple silicon — Metal will be unavailable or slow. Use --cpu."
 fi
 
-PY="${PYTHON:-python3}"
-command -v "$PY" >/dev/null || die "$PY not found — set PYTHON=/path/to/python3"
-"$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' \
-  || die "need python >= 3.10, found $("$PY" --version)"
-say "Using $("$PY" --version) at $(command -v "$PY")"
+VENV="$ROOT/references/audio8/.venv"
+
+# Resolve a python only when one is actually needed. macOS ships 3.9, so demanding >= 3.10
+# up front fails on a machine where everything is already built and no python will be run.
+need_python() {
+  if [ -x "$VENV/bin/python" ]; then
+    PY="$VENV/bin/python"
+    return 0
+  fi
+  PY="${PYTHON:-python3}"
+  command -v "$PY" >/dev/null || die "$PY not found — set PYTHON=/path/to/python3"
+  "$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' || die \
+    "need python >= 3.10, found $("$PY" --version) at $(command -v "$PY").
+   macOS ships 3.9. Install a newer one (brew install python@3.12) and either put it on
+   PATH or pass it explicitly:  PYTHON=/opt/homebrew/bin/python3.12 $0"
+  say "Using $("$PY" --version) at $(command -v "$PY")"
+}
 
 # ------------------------------------------------------------------ 2. checkpoint
 
@@ -52,9 +64,7 @@ if [ -f "$WEIGHTS/model.safetensors" ] && [ -f "$WEIGHTS/codec.pth" ]; then
   say "Audio8 checkpoint already present in references/audio8/weights — skipping download"
 else
   say "Downloading Audio8/Audio8-TTS-Preview-0.6b (~2.4 GB) into references/audio8/weights"
-  command -v hf >/dev/null 2>&1 || command -v huggingface-cli >/dev/null 2>&1 || {
-    warn "The Hugging Face CLI is not installed; falling back to python."
-  }
+  need_python
   "$PY" - "$WEIGHTS" <<'PYEOF'
 import sys
 try:
@@ -71,14 +81,16 @@ fi
 
 # ------------------------------------------------------------------ 3. python env
 
-VENV="$ROOT/references/audio8/.venv"
-if [ ! -x "$VENV/bin/python" ]; then
+if [ -x "$VENV/bin/python" ]; then
+  say "references/audio8/.venv already exists — skipping (delete it to rebuild)"
+else
+  need_python
   say "Creating references/audio8/.venv"
   "$PY" -m venv "$VENV"
+  say "Installing requirements.txt (torch and friends — this is the slow part)"
+  "$VENV/bin/pip" install --quiet --upgrade pip
+  "$VENV/bin/pip" install --quiet -r "$ROOT/references/audio8/requirements.txt"
 fi
-say "Installing references/audio8/requirements.txt (torch and friends — this is the slow part)"
-"$VENV/bin/pip" install --quiet --upgrade pip
-"$VENV/bin/pip" install --quiet -r "$ROOT/references/audio8/requirements.txt"
 
 # ------------------------------------------------------------------ 4. fold codec
 
@@ -95,17 +107,29 @@ fi
 say "Building the workspace"
 cargo build --release
 
-cat <<EOF
+say "Done. Audio8 is ready:"
+cat <<'EOF'
 
-$(say "Done. Audio8 is ready:")
-
-    cargo run -p tts-cli --release -- speak \\
-        --engine audio8 --voice voices/cosy-default \\
+    cargo run -p tts-cli --release -- speak \
+        --engine audio8 --voice voices/cosy-default \
         --text "Hello from a fresh checkout." --out hello.wav
-
-Not yet set up:
-  * CosyVoice           — needs the upstream repo; see docs/setup.md
-  * The fixture gates   — need fixtures dumped from PyTorch; see docs/setup.md
-
-Verify whatever you have with:  scripts/gates.sh
 EOF
+
+# Report what is actually still missing rather than assuming a fresh machine.
+missing=0
+if [ ! -d "$ROOT/references/cosyvoice/weights" ] \
+   || [ ! -f "$ROOT/references/cosyvoice/weights/rand_noise.safetensors" ]; then
+  printf '\n  * CosyVoice is not set up — it needs the upstream repo. See docs/setup.md §2\n'
+  missing=1
+fi
+if [ ! -f "$ROOT/fixtures/audio8/oracle.safetensors" ]; then
+  printf '  * The Audio8 fixture gate has no fixtures. See docs/setup.md §3\n'
+  missing=1
+fi
+if [ ! -f "$ROOT/fixtures/cosyvoice/oracle.safetensors" ]; then
+  printf '  * The CosyVoice fixture gate has no fixtures. See docs/setup.md §3\n'
+  missing=1
+fi
+[ "$missing" -eq 0 ] && printf '\nEverything else is present too — both engines and both fixture gates.\n'
+
+printf '\nVerify with:  ./scripts/gates.sh\n'

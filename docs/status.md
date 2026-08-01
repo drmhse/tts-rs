@@ -1,7 +1,7 @@
 # Status: two engines, both ported, both validated
 
-Text in, speech out, one process, bounded memory. 10296 lines of Rust across eight crates, no
-ONNX and no Python at runtime.
+Text in, speech out, one process, bounded memory. 13916 lines of Rust across eight crates,
+no ONNX and no Python at runtime.
 
 | engine | model | params | state | RTF | gate |
 |---|---|---|---|---|---|
@@ -9,7 +9,9 @@ ONNX and no Python at runtime.
 | `cosyvoice` | Fun-CosyVoice3-0.5B, 24 kHz | 995 M | ready | **0.697** | 27 checks, teacher-forced ids 105/105 |
 
 ```
-cargo test --release                               # 27 suites
+./scripts/gates.sh                                 # everything below, in order
+
+cargo test --release                               # 32 tests incl. the doctest
 cargo run -p audio8   --release --bin audio8-validate      # Audio8 fixture gate
 cargo run -p cosyvoice --release --bin cosyvoice-validate    # CosyVoice fixture gate
 cargo run -p cosyvoice --release --bin cosyvoice-bench       # where CosyVoice's time goes
@@ -20,14 +22,14 @@ cargo run -p tts-cli --release -- engines
 
 | crate | lines | what |
 |---|---|---|
-| `tts-core` | 674 | `Engine` trait, voice assets, segmentation, WAV, the PRNG |
-| `tts-nn` | 773 | shared model machinery: convs, activations, norms, RoPE tables, `Proj`, `Linear` |
+| `tts-core` | 683 | `Engine` trait, voice assets, segmentation, WAV, the PRNG |
+| `tts-nn` | 1789 | shared model machinery, plus the custom Metal kernels (`mtl`, `im2col`, `fused`) |
 | `tts-bench` | 179 | the thermally-honest measurement harness |
-| `tts-engines` | 69 | the registry — the one file that knows which engines exist |
-| `tts-cli` | 237 | `tts`: engines / voice / speak |
-| `audio8` | 2654 | Audio8: `ar`, `codec`, `sample`, `prompt`, `engine` + gate |
-| `cosyvoice` | 3176 | CosyVoice: `llm`, `flow`, `hift`, `stft`, `sample`, `engine` + gate and bench |
-| `tts-probe` | 2534 | op-level benchmarks |
+| `tts-engines` | 81 | the registry — the one file that knows which engines exist |
+| `tts-cli` | 244 | `tts`: engines / voice / speak |
+| `audio8` | 2865 | Audio8: `ar`, `codec`, `sample`, `prompt`, `engine` + gate |
+| `cosyvoice` | 3726 | CosyVoice: `llm`, `flow`, `hift`, `stft`, `sample`, `engine` + gate and bench |
+| `tts-probe` | 4349 | op-level benchmarks, one binary per question |
 
 ## Validation
 

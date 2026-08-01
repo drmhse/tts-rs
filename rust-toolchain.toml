@@ -1,0 +1,5 @@
+# The toolchain every figure in docs/ was measured with. `rust-version` in Cargo.toml
+# is the declared minimum; this is what CI pins and what a fresh machine will fetch.
+[toolchain]
+channel = "1.92"
+components = ["rustfmt", "clippy"]

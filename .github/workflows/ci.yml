@@ -1,0 +1,54 @@
+# What must hold on a machine that has never seen the model weights.
+#
+# Neither engine can synthesize without a checkpoint, and the fixture gates need
+# reference tensors dumped from PyTorch (docs/setup.md). So CI covers everything that
+# does *not* need them: it builds both feature configurations, runs the unit tests and
+# the doctest, and holds the line on lints and formatting.
+#
+# The two configurations matter independently:
+#   * default features  -> Metal, macOS only. This is what ships.
+#   * --no-default-features -> CPU, portable. This is what keeps the port honest about
+#     running elsewhere, and it is the only configuration Linux can build at all,
+#     because candle's `metal` feature does not exist off Apple platforms.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  metal:
+    name: macOS / Metal
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --release --all-targets -- -D warnings
+      - run: cargo test --release
+      - run: cargo doc --no-deps --workspace
+
+  cpu:
+    name: ${{ matrix.os }} / CPU
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --release --no-default-features --all-targets -- -D warnings
+      - run: cargo test --release --no-default-features
+
+  scripts:
+    name: shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: for f in scripts/*.sh; do bash -n "$f"; done
+      - name: shellcheck
+        run: shellcheck scripts/*.sh || true   # advisory: style, not correctness

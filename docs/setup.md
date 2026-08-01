@@ -11,9 +11,11 @@ Three levels, each useful on its own. Stop at whichever one you need.
 Voice assets are **already in the repo** (`voices/`, ~200 KB), so you do not need any
 PyTorch to clone a voice — only to build a *new* one.
 
-Everything below assumes macOS on Apple silicon. The engines build and run elsewhere,
-but the Metal kernels in `tts-nn` and every performance figure in `docs/` do not apply;
-use `--cpu` and expect correctness rather than speed.
+Everything below assumes macOS on Apple silicon. The engines do build and run elsewhere —
+`cargo build --no-default-features` drops the Metal kernels for their CPU fallbacks, and
+that is the only configuration Linux can build, because candle's `metal` feature does not
+exist off Apple platforms. Correctness is unchanged and the unit tests cover it; speed is
+not (Audio8 is RTF 3.39 on CPU against 0.499 on Metal).
 
 ---
 

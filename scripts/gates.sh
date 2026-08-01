@@ -34,6 +34,13 @@ fi
 lints=$(cargo clippy --release --all-targets 2>&1 | grep -cE "^warning: [a-z]" || true)
 echo "clippy: $lints lint(s)"
 
+say "CPU-only build (the portable configuration)"
+if cargo build --release --no-default-features --quiet 2>&1 | tail -5; then
+  echo "no-default-features builds"
+else
+  echo "no-default-features FAILED"; fail=1
+fi
+
 say "Audio8 fixture gate"
 if [ -f fixtures/audio8/oracle.safetensors ] && [ -f references/audio8/weights/codec.safetensors ]; then
   cargo run -q -p audio8 --release --bin audio8-validate || fail=1
