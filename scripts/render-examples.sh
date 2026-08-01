@@ -30,6 +30,6 @@ run --engine cosyvoice --voice voices/cosy-default-cosyvoice \
 cat <<'MSG'
 
 Done. The PyTorch reference renders (senior.wav, senior_batch8.wav,
-senior_cosyvoice.wav, cosy_senior_torch.wav) come from oracle/synthesize.py and
-oracle-cosy/reference_render.py — see examples/README.md.
+senior_cosyvoice.wav, cosy_senior_torch.wav) come from references/audio8/synthesize.py and
+references/cosyvoice/reference_render.py — see examples/README.md.
 MSG

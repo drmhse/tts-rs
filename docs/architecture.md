@@ -8,13 +8,13 @@ tts-cli          `tts engines` / `tts voice` / `tts speak --engine ...`
    |
 tts-engines      the registry: the ONLY place that knows which engines exist
    |        \
-  a8         cosy          engines: one crate each, no knowledge of each other
+  audio8     cosyvoice     engines: one crate each, no knowledge of each other
    |    \    /    |
    |     tts-nn   |        shared model machinery: convs, activations, norms, RoPE, Proj
    \      /       /
     tts-core             Engine trait, Voice assets, segmentation, WAV, the PRNG
 
-tts-bench                the measurement harness, used by a8-probe and cosy-bench
+tts-bench                the measurement harness, used by tts-probe and cosyvoice-bench
 ```
 
 Five rules, each of which earned its place.
@@ -27,11 +27,11 @@ is talking to Audio8, the abstraction is wrong.
 else. `tts-core` cannot depend on its implementations (that would be circular) and the CLI
 should not enumerate them (a service would have to duplicate the list).
 
-**Engines do not know about each other.** `a8` and `cosy` both depend on `tts-core` and
+**Engines do not know about each other.** `audio8` and `cosyvoice` both depend on `tts-core` and
 `tts-nn`, and neither depends on the other. This is why `tts-nn` exists: when the CosyVoice
 port needed causal convolutions, snake activations, RoPE tables and the quantized projection
-wrapper, the choice was to lift them out of `a8::nn` rather than let `cosy` reach into `a8`.
-`a8` re-exports the crate as `a8::nn` so its own call sites read unchanged.
+wrapper, the choice was to lift them out of `audio8::nn` rather than let `cosyvoice` reach into `audio8`.
+`audio8` re-exports the crate as `audio8::nn` so its own call sites read unchanged.
 
 **Shared does not mean identical.** `tts-nn` carries *both* RoPE conventions
 (`rope_table` bf16-rounded and interleaved for Audio8, `rope_table_f32` for CosyVoice's DiT)
@@ -75,7 +75,7 @@ requested — voice assets are not interchangeable between engines
 
 That check matters because the tensors are not merely differently shaped, they mean different
 things, and a silent fallback would produce a plausible voice that is not the one asked for.
-`cosy` adds a second check of its own: the prompt mel must be exactly
+`cosyvoice` adds a second check of its own: the prompt mel must be exactly
 `speech_tokens * TOKEN_MEL_RATIO` frames, because the flow decoder holds each token for two
 mel frames and a mismatch would misalign the prompt against its conditioning without
 erroring.
@@ -90,7 +90,7 @@ and having engines call `Voice::get_on` makes the whole class of error unreachab
 
 **The consequence: the Rust runtime for both engines is safetensors-only.** No ONNX, no
 encoders, ~1.1 GB of model surface removed from the binary across the two engines. ONNX
-survives only in `oracle-cosy/export_voice.py`, where it runs in a venv that already has
+survives only in `references/cosyvoice/export_voice.py`, where it runs in a venv that already has
 onnxruntime and its speed is irrelevant — the right place for it, given `rejected/onnx.md`
 measured ORT as the slowest runtime on this machine.
 
@@ -115,7 +115,7 @@ the K-quants at all, since those need `k` divisible by 256 and both are 896 wide
 "q8_0" generically would be a lie by omission. What the table cannot express is *where*
 quantization helps: candle takes a dedicated matrix-vector kernel only when `dim(-2) == 1`,
 so quantizing a decode loop is a 3.35x win while quantizing the DiT — which only ever runs on
-full sequences — buys much less. `cosy` therefore quantizes the LLM and leaves the flow
+full sequences — buys much less. `cosyvoice` therefore quantizes the LLM and leaves the flow
 decoder and vocoder dense, and says so in `tts_nn::Proj`'s documentation rather than leaving
 it to be rediscovered.
 
@@ -134,7 +134,7 @@ property of the request — every model has a context limit and every model degr
 prosody over too long a span — but *iterating* segments, timing the stages and stitching with
 silence is per-engine.
 
-This is also why the standalone `a8` binary was deleted (it lives in `docs/rejected/attic/`): it and the
+This is also why the standalone `audio8` binary was deleted (it lives in `docs/rejected/attic/`): it and the
 CLI were two code paths to the same synthesis.
 
 ## Adding an engine

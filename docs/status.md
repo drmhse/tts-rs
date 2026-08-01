@@ -10,9 +10,9 @@ ONNX and no Python at runtime.
 
 ```
 cargo test --release                               # 27 suites
-cargo run -p a8   --release --bin a8-validate      # Audio8 fixture gate
-cargo run -p cosy --release --bin cosy-validate    # CosyVoice fixture gate
-cargo run -p cosy --release --bin cosy-bench       # where CosyVoice's time goes
+cargo run -p audio8   --release --bin audio8-validate      # Audio8 fixture gate
+cargo run -p cosyvoice --release --bin cosyvoice-validate    # CosyVoice fixture gate
+cargo run -p cosyvoice --release --bin cosyvoice-bench       # where CosyVoice's time goes
 cargo run -p tts-cli --release -- engines
 ```
 
@@ -25,9 +25,9 @@ cargo run -p tts-cli --release -- engines
 | `tts-bench` | 179 | the thermally-honest measurement harness |
 | `tts-engines` | 69 | the registry — the one file that knows which engines exist |
 | `tts-cli` | 237 | `tts`: engines / voice / speak |
-| `a8` | 2654 | Audio8: `ar`, `codec`, `sample`, `prompt`, `engine` + gate |
-| `cosy` | 3176 | CosyVoice: `llm`, `flow`, `hift`, `stft`, `sample`, `engine` + gate and bench |
-| `a8-probe` | 2534 | op-level benchmarks |
+| `audio8` | 2654 | Audio8: `ar`, `codec`, `sample`, `prompt`, `engine` + gate |
+| `cosyvoice` | 3176 | CosyVoice: `llm`, `flow`, `hift`, `stft`, `sample`, `engine` + gate and bench |
+| `tts-probe` | 2534 | op-level benchmarks |
 
 ## Validation
 
@@ -86,7 +86,7 @@ like a defect, but the PyTorch reference on the same text lands +13.0 Hz on the 
 with the same spectral match. ±13 Hz is what the model does as the sampled token sequence
 changes, and no userspace RNG reproduces torch's stream, so the sequences necessarily differ.
 
-WER here is `whisper small.en` via `oracle-cosy/wer.py`. It is **not** comparable to the 0.031
+WER here is `whisper small.en` via `references/cosyvoice/wer.py`. It is **not** comparable to the 0.031
 quoted in `performance/quantization-quality.md`, which used WhisperX — only same-recogniser comparisons mean
 anything.
 
@@ -206,7 +206,7 @@ Kept so nobody repeats them.
     fused kernel into Audio8's windowed codec attention passed the 24-frame fixture at 7.6e-6
     and failed the 8-frame one at 6.4e-1. Reverted; that attention stays hand-rolled.
 
-  Both are characterised by `a8-probe --bin dit`. The fused kernel is still used where neither
+  Both are characterised by `tts-probe --bin dit`. The fused kernel is still used where neither
   applies — the DiT's unmasked, full-width attention — which is where the 2.6x came from.
 - **Longer CosyVoice segments are a wash** (1.02x): the flow gains what the LLM gives back.
 

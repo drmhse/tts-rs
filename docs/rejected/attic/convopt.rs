@@ -11,7 +11,7 @@
 //! when Cout is small. A GEMM has no notion of channels -- it sees M=L, K=C*k,
 //! N=Cout -- so im2col + matmul should be insensitive to the channel count.
 //!
-//! Run:  cargo run -p a8-probe --release --bin convopt
+//! Run:  cargo run -p tts-probe --release --bin convopt
 
 use anyhow::Result;
 use candle_core::{DType, Device, Tensor};

@@ -44,7 +44,7 @@ use tts_core::{Capabilities, Engine, EngineConfig};
 
 /// Every engine known to this build, in preference order.
 pub fn catalogue() -> Vec<Capabilities> {
-    vec![a8::engine::capabilities(), cosy::capabilities()]
+    vec![audio8::engine::capabilities(), cosyvoice::capabilities()]
 }
 
 /// Ids a caller may pass to [`load`].
@@ -59,13 +59,13 @@ pub fn default_id() -> &'static str {
         .into_iter()
         .find(|c| c.available)
         .map(|c| c.id)
-        .unwrap_or(a8::engine::ID)
+        .unwrap_or(audio8::engine::ID)
 }
 
 pub fn load(id: &str, config: &EngineConfig) -> Result<Box<dyn Engine>> {
     match id {
-        a8::engine::ID => Ok(Box::new(a8::engine::Audio8Engine::load(config)?)),
-        cosy::ID => Ok(Box::new(cosy::CosyVoiceEngine::load(config)?)),
+        audio8::engine::ID => Ok(Box::new(audio8::engine::Audio8Engine::load(config)?)),
+        cosyvoice::ID => Ok(Box::new(cosyvoice::CosyVoiceEngine::load(config)?)),
         other => anyhow::bail!("unknown engine `{other}`; available: {}", ids().join(", ")),
     }
 }
@@ -74,8 +74,8 @@ pub fn load(id: &str, config: &EngineConfig) -> Result<Box<dyn Engine>> {
 /// configuration, overridable through [`EngineConfig::overrides`].
 pub fn default_root(id: &str) -> &'static str {
     match id {
-        a8::engine::ID => "oracle/weights",
-        cosy::ID => "oracle-cosy/weights",
+        audio8::engine::ID => "references/audio8/weights",
+        cosyvoice::ID => "references/cosyvoice/weights",
         _ => ".",
     }
 }

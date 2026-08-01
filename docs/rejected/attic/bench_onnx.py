@@ -102,7 +102,7 @@ def main() -> None:
     parser.add_argument("--iters", type=int, default=3)
     args = parser.parse_args()
 
-    fixture = load_file("../fixtures/oracle.safetensors")
+    fixture = load_file("../fixtures/audio8/oracle.safetensors")
     print(f"ort {ort.__version__}   providers {ort.get_available_providers()}\n")
 
     print("=== CPUExecutionProvider ===")

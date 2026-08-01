@@ -281,7 +281,7 @@ impl CustomOp1 for HeadTranspose {
 /// measured **0.98x** at the engine's real sequence length. The strided-view decision in
 /// `DiTBlock::attention` was checked against a fast transpose and survives.
 ///
-/// Kept because the negative result is worth being able to re-run (`a8-probe --bin
+/// Kept because the negative result is worth being able to re-run (`tts-probe --bin
 /// attnlayout`), and because any future path that needs a genuinely contiguous head layout
 /// should not pay candle's 8.5 GB/s for it.
 pub fn head_transpose(x: &Tensor, heads: usize, dim: usize) -> Result<Tensor> {

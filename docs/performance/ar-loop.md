@@ -6,7 +6,7 @@ record thermal state. Every table below reports its drift; all were stable
 (≤1.08×). These are the first trustworthy numbers in the project.
 
 Probes: `arloop`, `dispatch`, `quant`, `matvec`, `chain` (Rust),
-`oracle/bench_ar.py` (torch). Quality: `qroundtrip` + `oracle/quality_ar.py`, written
+`references/audio8/bench_ar.py` (torch). Quality: `qroundtrip` + `references/audio8/quality_ar.py`, written
 up in [quantization-quality.md](quantization-quality.md).
 
 One caution carried through the whole document: the `quant` run was hot (canary
@@ -225,11 +225,11 @@ segments through `/v1/tts-jobs`.
 
 ### Implemented — and the 11.95× did not survive contact
 
-`generate_batch` is in `crates/a8/src/ar.rs`, wired into the engine with width bucketing and
+`generate_batch` is in `crates/audio8/src/ar.rs`, wired into the engine with width bucketing and
 `--set max_batch=<n>`. **The per-sequence gain is ~1.9×, not 11.95×**, and the difference is
 the most useful thing this section has to say.
 
-Measured on the real loop (`a8-probe --bin arbatch`, canary-stable, sampling on):
+Measured on the real loop (`tts-probe --bin arbatch`, canary-stable, sampling on):
 
 | batch | ms/step | ms/step/seq | per-sequence gain | break-even `sum/max` |
 |---|---|---|---|---|
@@ -297,7 +297,7 @@ sampled cool — and produced a flattering 3.52x that was equally meaningless.
 
 Consecutive heavy runs cannot be compared on this machine, which is the whole point of
 `../benchmarking.md`, and a sweep of separate CLI invocations cannot honour it. The
-schedule is therefore measured by `a8-probe --bin arschedule`, which interleaves the
+schedule is therefore measured by `tts-probe --bin arschedule`, which interleaves the
 `max_batch` variants round by round inside one process and reports the canary at both ends.
 
 Both of the wrong readings pointed the same way — *batch 2 is best, batch 8 is a wash* — and
@@ -321,7 +321,7 @@ defaults to 8.
 
 ### What is exact, and what is not
 
-Two properties are asserted by `a8-validate`:
+Two properties are asserted by `audio8-validate`:
 
 - **A batch of identical prompts reproduces the unbatched result exactly.** This is the batch
   axis alone, with no padding involved.

@@ -64,10 +64,10 @@ optimization, not after.
 
 ## The harness now exists
 
-`crates/a8-probe/src/bench.rs` (`Harness`) implements all five points:
+`crates/tts-probe/src/bench.rs` (`Harness`) implements all five points:
 interleaved variants in one process, median and spread of ≥5 samples, the fixed
 canary conv timed before and after with the drift reported, and a ratio column
-against the first variant. `oracle/bench_ar.py` mirrors it in Python with the same
+against the first variant. `references/audio8/bench_ar.py` mirrors it in Python with the same
 canary, so Rust and torch runs are placed on the same thermal scale.
 
 Every number in [performance/ar-loop.md](performance/ar-loop.md) came through it. Those

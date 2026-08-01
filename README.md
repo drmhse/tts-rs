@@ -91,7 +91,7 @@ no supervisor and no growth budget.
 | [docs/performance/candle-on-metal.md](docs/performance/candle-on-metal.md) | where the time goes, and what candle does not fuse |
 | [docs/performance/quantization-quality.md](docs/performance/quantization-quality.md) | q8_0 costs nothing audible; why token identity is the wrong metric |
 | [docs/rejected/](docs/rejected/) | ONNX, CoreML, and an attic of experiments that did not work out |
-| [crates/a8-probe/README.md](crates/a8-probe/README.md) | the measurement binaries, indexed by the question each answers |
+| [crates/tts-probe/README.md](crates/tts-probe/README.md) | the measurement binaries, indexed by the question each answers |
 | [examples/README.md](examples/README.md) | the renders, and how to reproduce them |
 
 </details>
@@ -99,19 +99,26 @@ no supervisor and no growth budget.
 ## Layout
 
 ```
-crates/tts-core/     the Engine trait, voice assets, segmentation, WAV, the PRNG
-crates/tts-nn/       shared model machinery + the custom Metal kernels
-crates/tts-engines/  the registry — the one place that knows which engines exist
-crates/tts-cli/      the `tts` binary: engines / voice / speak
-crates/a8/           the Audio8 engine + its fixture gate
-crates/cosy/         the CosyVoice engine + its fixture gate and bench
-crates/tts-bench/    the thermally-honest measurement harness
-crates/a8-probe/     op-level benchmarks, one binary per question (see its README)
-oracle/              Audio8 PyTorch reference: conversion, fixtures, quality scripts
-oracle-cosy/         CosyVoice PyTorch reference: conversion, voice export, WER
-voices/              voice assets, one directory each (tracked — they are small)
-scripts/             bootstrap and verification
+crates/tts-core/        the Engine trait, voice assets, segmentation, WAV, the PRNG
+crates/tts-nn/          shared model machinery + the custom Metal kernels
+crates/tts-engines/     the registry — the one place that knows which engines exist
+crates/tts-cli/         the `tts` binary: engines / voice / speak
+crates/tts-bench/       the thermally-honest measurement harness
+crates/tts-probe/       op-level benchmarks, one binary per question (see its README)
+crates/audio8/          the Audio8 engine + its fixture gate
+crates/cosyvoice/       the CosyVoice engine + its fixture gate and bench
+
+references/audio8/      Audio8's PyTorch side: conversion, fixtures, quality scripts
+references/cosyvoice/   CosyVoice's: conversion, voice export, WER
+fixtures/{audio8,cosyvoice}/    per-stage ground truth the gates compare against
+voices/                 voice assets, one directory each (tracked — they are small)
+scripts/                bootstrap, gates, render-examples
+docs/                   setup, architecture, status, and the investigation record
 ```
+
+Everything shared is named `tts-*`; everything engine-specific is named for its engine,
+and the two engines' directories are symmetric. `crates/audio8` and `crates/cosyvoice`
+match the ids `--engine` takes, so there is one name per thing.
 
 Weights, fixtures and virtualenvs are not tracked; `docs/setup.md` regenerates them.
 

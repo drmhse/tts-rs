@@ -13,7 +13,7 @@
 //! subsequences can ride the batch dimension. Reshape + permute + one batched
 //! dense conv, then interleave back. No approximation.
 //!
-//! Run:  cargo run -p a8-probe --release --bin dilation
+//! Run:  cargo run -p tts-probe --release --bin dilation
 
 use anyhow::Result;
 use candle_core::{Device, Tensor};

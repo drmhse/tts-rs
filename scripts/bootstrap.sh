@@ -5,7 +5,7 @@
 # What it does:
 #   1. checks the toolchain and the platform
 #   2. downloads the Audio8 checkpoint (~2.4 GB) from Hugging Face
-#   3. creates oracle/.venv and folds the codec's weight_norm into safetensors
+#   3. creates references/audio8/.venv and folds the codec's weight_norm into safetensors
 #
 # What it deliberately does *not* do: set up CosyVoice. That engine needs the upstream
 # CosyVoice repository and its own python 3.10 environment, because converting its
@@ -47,11 +47,11 @@ say "Using $("$PY" --version) at $(command -v "$PY")"
 
 # ------------------------------------------------------------------ 2. checkpoint
 
-WEIGHTS="$ROOT/oracle/weights"
+WEIGHTS="$ROOT/references/audio8/weights"
 if [ -f "$WEIGHTS/model.safetensors" ] && [ -f "$WEIGHTS/codec.pth" ]; then
-  say "Audio8 checkpoint already present in oracle/weights — skipping download"
+  say "Audio8 checkpoint already present in references/audio8/weights — skipping download"
 else
-  say "Downloading Audio8/Audio8-TTS-Preview-0.6b (~2.4 GB) into oracle/weights"
+  say "Downloading Audio8/Audio8-TTS-Preview-0.6b (~2.4 GB) into references/audio8/weights"
   command -v hf >/dev/null 2>&1 || command -v huggingface-cli >/dev/null 2>&1 || {
     warn "The Hugging Face CLI is not installed; falling back to python."
   }
@@ -63,31 +63,31 @@ except ImportError:
     sys.exit(
         "huggingface_hub is not installed.\n"
         "Either `pip install huggingface_hub` into your python, or download\n"
-        "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b into oracle/weights by hand."
+        "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b into references/audio8/weights by hand."
     )
 snapshot_download("Audio8/Audio8-TTS-Preview-0.6b", local_dir=sys.argv[1])
 PYEOF
 fi
 
-# ------------------------------------------------------------------ 3. oracle venv
+# ------------------------------------------------------------------ 3. python env
 
-VENV="$ROOT/oracle/.venv"
+VENV="$ROOT/references/audio8/.venv"
 if [ ! -x "$VENV/bin/python" ]; then
-  say "Creating oracle/.venv"
+  say "Creating references/audio8/.venv"
   "$PY" -m venv "$VENV"
 fi
-say "Installing oracle/requirements.txt (torch and friends — this is the slow part)"
+say "Installing references/audio8/requirements.txt (torch and friends — this is the slow part)"
 "$VENV/bin/pip" install --quiet --upgrade pip
-"$VENV/bin/pip" install --quiet -r "$ROOT/oracle/requirements.txt"
+"$VENV/bin/pip" install --quiet -r "$ROOT/references/audio8/requirements.txt"
 
 # ------------------------------------------------------------------ 4. fold codec
 
 CODEC="$WEIGHTS/codec.safetensors"
 if [ -f "$CODEC" ] && [ "$FORCE" != "--force" ]; then
-  say "oracle/weights/codec.safetensors already built — skipping (pass --force to redo)"
+  say "references/audio8/weights/codec.safetensors already built — skipping (pass --force to redo)"
 else
   say "Folding the codec's weight_norm into safetensors (~1 GB out)"
-  ( cd "$ROOT/oracle" && .venv/bin/python convert_codec.py --weights weights --out weights/codec.safetensors )
+  ( cd "$ROOT/references/audio8" && .venv/bin/python convert_codec.py --weights weights --out weights/codec.safetensors )
 fi
 
 # ------------------------------------------------------------------ 5. build

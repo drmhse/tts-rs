@@ -46,7 +46,7 @@ def main() -> None:
     # 8-frame fixture check when the frame axis is actually symbolic.
     frame_dim = session.get_inputs()[0].shape[2]
     if isinstance(frame_dim, str):
-        fixture = load_file("../fixtures/oracle.safetensors")
+        fixture = load_file("../fixtures/audio8/oracle.safetensors")
         codes = fixture["codec_syn.codes"].numpy().astype(np.int64)
         expected = fixture["codec_syn.wav"].numpy()
         got = session.run(["wav"], {"codes": codes})[0]

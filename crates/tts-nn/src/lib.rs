@@ -1,8 +1,8 @@
 //! Model machinery shared by the engines: convolutions, activations, norms, RoPE
 //! tables, weight loading, and the quantized projection wrapper.
 //!
-//! This crate exists so `cosy` can reuse what the Audio8 port established without
-//! depending on `a8` (see `docs/architecture.md`: engines do not know about each other).
+//! This crate exists so `cosyvoice` can reuse what the Audio8 port established without
+//! depending on `audio8` (see `docs/architecture.md`: engines do not know about each other).
 //! Everything here is engine-agnostic; anything that needs a model's geometry belongs
 //! in that model's crate.
 //!

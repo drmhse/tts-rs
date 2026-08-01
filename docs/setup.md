@@ -25,8 +25,8 @@ use `--cpu` and expect correctness rather than speed.
 
 That checks your toolchain, downloads
 [Audio8/Audio8-TTS-Preview-0.6b](https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b)
-(~2.4 GB) into `oracle/weights/`, creates `oracle/.venv`, folds the codec's `weight_norm`
-into `oracle/weights/codec.safetensors`, and builds the workspace. It is idempotent —
+(~2.4 GB) into `references/audio8/weights/`, creates `references/audio8/.venv`, folds the codec's `weight_norm`
+into `references/audio8/weights/codec.safetensors`, and builds the workspace. It is idempotent —
 re-running skips whatever is already done.
 
 Then:
@@ -46,7 +46,7 @@ conversion time means the Rust side memory-maps plain weights and does no
 reparametrisation at runtime:
 
 ```sh
-cd oracle
+cd references/audio8
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python convert_codec.py --weights weights --out weights/codec.safetensors
 ```
@@ -68,19 +68,24 @@ venv, and download `Fun-CosyVoice3-0.5B` into its `pretrained_models/`.
 it runs under either environment:
 
 ```sh
-/path/to/CosyVoice/.venv/bin/python oracle-cosy/convert.py \
+/path/to/CosyVoice/.venv/bin/python references/cosyvoice/convert.py \
     --checkpoints /path/to/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B \
-    --out oracle-cosy/weights
+    --out references/cosyvoice/weights
 ```
 
 It prints a tensor inventory as it goes. That inventory is the spec the Rust port was
-written against — if it does not match `fixtures-cosy/oracle.json`, you have a different
+written against — if it does not match `fixtures/cosyvoice/oracle.json`, you have a different
 model revision and the gates will fail for a good reason.
 
 **c. Fetch the fixed noise tensor.** CosyVoice's vocoder draws NSF noise at construction
-from a seeded RNG, so it is not in the checkpoint. `fixtures-cosy/rand_noise.safetensors`
-is produced by step 3 below; without it the engine cannot start. If you are not
-regenerating fixtures, copy it from a machine that has one.
+from a seeded RNG, so it is not in the checkpoint. `references/cosyvoice/weights/rand_noise.safetensors`
+is produced by step 3 below, which writes it into `fixtures/cosyvoice/`; copy it across:
+
+```sh
+cp fixtures/cosyvoice/rand_noise.safetensors references/cosyvoice/weights/
+```
+
+Without it the engine cannot start.
 
 ```sh
 cargo run -p tts-cli --release -- speak \
@@ -93,21 +98,22 @@ cargo run -p tts-cli --release -- speak \
 ## 3. Regenerate the fixtures
 
 The gates compare this port against per-stage fp32 activations dumped from PyTorch. The
-tensors are too large to track (`fixtures/` and `fixtures-cosy/` are gitignored), but the
+tensors are too large to track (`fixtures/` and `fixtures/cosyvoice/` are gitignored), but the
 `.json` inventories beside them **are** tracked, so you can always see which tensors a
 gate expects and with what shapes.
 
 ```sh
-# Audio8 — from this repo's oracle venv
-cd oracle && .venv/bin/python dump_fixtures.py --weights weights --out ../fixtures
+# Audio8 — from this repo's reference venv
+cd references/audio8 && .venv/bin/python dump_fixtures.py \
+    --weights weights --out ../../fixtures/audio8
 
 # CosyVoice — from the CosyVoice repo, which must be on PYTHONPATH
 cd /path/to/CosyVoice
 PYTHONPATH=.:third_party/Matcha-TTS .venv/bin/python \
-    /path/to/audio8-rs/oracle-cosy/dump_fixtures.py \
+    /path/to/tts-rs/references/cosyvoice/dump_fixtures.py \
     --model-dir pretrained_models/Fun-CosyVoice3-0.5B \
-    --voice /path/to/audio8-rs/voices/cosy-default-cosyvoice \
-    --out /path/to/audio8-rs/fixtures-cosy
+    --voice /path/to/tts-rs/voices/cosy-default-cosyvoice \
+    --out /path/to/tts-rs/fixtures/cosyvoice
 ```
 
 Then run everything:
@@ -128,16 +134,16 @@ the one they were built for.
 
 ```sh
 # Audio8
-cd oracle && .venv/bin/python export_voice.py \
+cd references/audio8 && .venv/bin/python export_voice.py \
     --weights weights --audio /path/to/clip.wav --text "what the clip says" \
-    --name my-voice --out ../voices
+    --name my-voice --out ../../voices
 
 # CosyVoice — from the CosyVoice repo
 PYTHONPATH=.:third_party/Matcha-TTS .venv/bin/python \
-    /path/to/audio8-rs/oracle-cosy/export_voice.py \
+    /path/to/tts-rs/references/cosyvoice/export_voice.py \
     --model-dir pretrained_models/Fun-CosyVoice3-0.5B \
     --audio /path/to/clip.wav --text "what the clip says" \
-    --name my-voice --out /path/to/audio8-rs/voices
+    --name my-voice --out /path/to/tts-rs/voices
 ```
 
 The transcript matters more than it looks: CosyVoice asserts that the prompt text
@@ -151,11 +157,11 @@ model and torchaudio:
 
 ```sh
 # intelligibility — needs openai-whisper, which lives in the CosyVoice venv
-/path/to/CosyVoice/.venv/bin/python oracle-cosy/wer.py \
+/path/to/CosyVoice/.venv/bin/python references/cosyvoice/wer.py \
     --text-file examples/senior.txt examples/cosy_senior.wav
 
 # speaker similarity: median F0 and long-term average spectrum
-/path/to/CosyVoice/.venv/bin/python oracle/verify_voice.py \
+/path/to/CosyVoice/.venv/bin/python references/audio8/verify_voice.py \
     --reference /path/to/reference_clip.wav examples/cosy_senior.wav
 ```
 
@@ -165,14 +171,14 @@ model and torchaudio:
 
 | path | size | tracked? |
 |---|---|---|
-| `oracle/weights/` | ~3.4 GB | no — downloaded and converted |
-| `oracle-cosy/weights/` | ~3.7 GB | no — converted from the CosyVoice repo |
+| `references/audio8/weights/` | ~3.4 GB | no — downloaded and converted |
+| `references/cosyvoice/weights/` | ~3.7 GB | no — converted from the CosyVoice repo |
 | `fixtures/` | ~65 MB, plus 8.8 GB if you run the quantization probe | no |
-| `fixtures-cosy/` | ~46 MB | no (the `.json` inventory is) |
+| `fixtures/cosyvoice/` | ~46 MB | no (the `.json` inventory is) |
 | `voices/` | ~200 KB | **yes** |
 | `target/` | ~1.8 GB | no |
 
-The 8.8 GB is four `fixtures/ar_q*.safetensors` dumps written by
-`a8-probe --bin qroundtrip` and read only by `oracle/quality_ar.py`, which asks whether
+The 8.8 GB is four `fixtures/audio8/ar_q*.safetensors` dumps written by
+`tts-probe --bin qroundtrip` and read only by `references/audio8/quality_ar.py`, which asks whether
 quantization changes the voice ([performance/quantization-quality.md](performance/quantization-quality.md)).
 That question is answered; delete them unless you are re-opening it.

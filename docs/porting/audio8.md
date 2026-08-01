@@ -130,7 +130,7 @@ service on RTF even if Candle/Metal only matches torch/MPS per-kernel.
 
 The existing CosyVoice service promises every clip is regenerable from its
 recorded seed. That cannot hold *across* engines: different RNG streams and
-different reduction orders. Within `audio8-rs` seeds will be reproducible; across
+different reduction orders. Within `tts-rs` seeds will be reproducible; across
 Python↔Rust they will not be.
 
 This precedent already exists in the project — the fp16 LLM switch broke

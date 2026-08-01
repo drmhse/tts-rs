@@ -6,7 +6,7 @@ out.
 
 These predate this repo's git history — they were carried across from before it was
 initialised, which is why they are files rather than reverted commits. New refutations do
-not belong here: they belong in a probe under `crates/a8-probe/` that can be re-run, with
+not belong here: they belong in a probe under `crates/tts-probe/` that can be re-run, with
 the conclusion in its module docstring. See that crate's README for the list.
 
 - `convopt.rs` — conv-as-GEMM (im2col / taps / chunked). All three correct, all
@@ -20,7 +20,7 @@ the conclusion in its module docstring. See that crate's README for the list.
   evaluation. The export itself worked and was bit-exact; every runtime
   configuration was the slowest option tested. See `../onnx.md`, including
   the four export patches, which are described there in enough detail to redo.
-- `a8-standalone-cli.rs` — the original single-engine `a8` binary. Superseded by
+- `a8-standalone-cli.rs` — the original single-engine `audio8` binary. Superseded by
   `crates/tts-cli` (`tts speak --engine audio8`), which does the same thing through the
   `tts_core::Engine` trait. Two code paths to the same synthesis is one too many, and
-  the segment loop it contained now lives in `crates/a8/src/engine.rs`.
+  the segment loop it contained now lives in `crates/audio8/src/engine.rs`.

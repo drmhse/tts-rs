@@ -9,7 +9,7 @@
 //!   -> conv 1024->1536 -> convT s8 -> 768ch/2048  -> convT s8 -> 384ch/16384
 //!   -> convT s4 -> 192ch/65536 -> convT s2 -> 96ch/131072 -> conv 96->1 -> tanh
 //!
-//! Run:  cargo run -p a8-probe --release
+//! Run:  cargo run -p tts-probe --release
 
 use anyhow::Result;
 use candle_core::{DType, Device, Tensor};

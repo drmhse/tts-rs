@@ -6,8 +6,7 @@
 # Converted checkpoints, several GB each. `scripts/bootstrap.sh` regenerates them from
 # the upstream models; see docs/setup.md. Never commit these — the licences belong to
 # the upstream model authors, not to this repo.
-/oracle/weights/
-/oracle-cosy/weights/
+/references/*/weights/
 
 # ---------------------------------------------------------------- fixtures
 #
@@ -15,13 +14,12 @@
 # `.json` inventories beside them are small and *are* tracked: they record the tensor
 # names and shapes each gate expects, which is worth having in history even when the
 # tensors themselves are not.
-/fixtures/*.safetensors
-/fixtures-cosy/*.safetensors
+/fixtures/*/*.safetensors
 
 # Quantization round-trip dumps: ~2.2 GB each, four of them, written by
-# `a8-probe --bin qroundtrip` and consumed only by `oracle/quality_ar.py`.
-/fixtures/ar_*.safetensors
-/fixtures/quality/
+# `tts-probe --bin qroundtrip` and consumed only by `references/audio8/quality_ar.py`.
+/fixtures/audio8/ar_*.safetensors
+/fixtures/audio8/quality/
 
 # ---------------------------------------------------------------- python
 .venv/

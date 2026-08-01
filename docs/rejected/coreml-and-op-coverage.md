@@ -9,7 +9,7 @@
 > [../performance/ar-loop.md](../performance/ar-loop.md). Everything here is real, but it is
 > optimising 4-8% of the runtime. Read that first.
 
-`cargo run -p a8-probe --release`, M4 / 16 GB, candle 0.10.2, f32, 64 code frames
+`cargo run -p tts-probe --release`, M4 / 16 GB, candle 0.10.2, f32, 64 code frames
 = 2.97 s of audio at 44.1 kHz. Random tensors at the real decoder shapes — no
 weights required, which is why this could run before the download finished.
 
@@ -101,14 +101,14 @@ when it is used.
 `groups=1024` depthwise conv costs 37.78 ms for ~1.8 MMAC of actual work — off by
 roughly three orders of magnitude. Expressing the same depthwise convolution as 7
 shifted `broadcast_mul` accumulations gives an identical result in 1.96 ms. Use
-the manual form in `a8-codec`; never call `conv1d` with `groups > 1`.
+the manual form in `audio8`'s codec; never call `conv1d` with `groups > 1`.
 
 ## ANSWERED: Candle is ~2× slower than PyTorch/MPS here
 
 Both numbers are now measured end to end on the same 64 frames, same machine.
-`cargo run -p a8-probe --release --bin cascade` builds the *entire* decode graph
+`cargo run -p tts-probe --release --bin cascade` builds the *entire* decode graph
 with random weights (shapes determine cost, so correctness is irrelevant) and
-`oracle/bench_codec.py` times the real `codec.decode()`.
+`references/audio8/bench_codec.py` times the real `codec.decode()`.
 
 | | ms | RTF |
 |---|---|---|

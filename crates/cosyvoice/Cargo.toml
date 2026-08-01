@@ -1,0 +1,26 @@
+[package]
+name = "cosyvoice"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+anyhow = { workspace = true }
+tts-core = { path = "../tts-core" }
+tts-nn = { path = "../tts-nn" }
+tts-bench = { path = "../tts-bench" }
+tokenizers = { version = "0.20", default-features = false, features = ["onig"] }
+
+[features]
+default = ["metal"]
+metal = ["candle-core/metal", "candle-nn/metal", "tts-core/metal", "tts-nn/metal", "tts-bench/metal"]
+
+[[bin]]
+name = "cosyvoice-bench"
+path = "src/bin/bench.rs"
+
+[[bin]]
+name = "cosyvoice-validate"
+path = "src/bin/validate.rs"

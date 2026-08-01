@@ -141,7 +141,7 @@ def main() -> None:
     codec = model.load_codec(device=torch.device("cpu"))
 
     # ---------------------------------------------- verify patches are exact
-    fixture = load_file("../fixtures/oracle.safetensors")
+    fixture = load_file("../fixtures/audio8/oracle.safetensors")
     syn_codes = fixture["codec_syn.codes"]
     with torch.inference_mode():
         before = codec.decode(syn_codes)

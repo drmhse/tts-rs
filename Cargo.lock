@@ -3,33 +3,6 @@
 version = 4
 
 [[package]]
-name = "a8"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "candle-core",
- "candle-nn",
- "serde_json",
- "tokenizers 0.20.4",
- "tts-core",
- "tts-nn",
-]
-
-[[package]]
-name = "a8-probe"
-version = "0.1.0"
-dependencies = [
- "a8",
- "anyhow",
- "candle-core",
- "candle-nn",
- "cosy",
- "tts-bench",
- "tts-core",
- "tts-nn",
-]
-
-[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -113,6 +86,19 @@ name = "anyhow"
 version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+
+[[package]]
+name = "audio8"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "candle-core",
+ "candle-nn",
+ "serde_json",
+ "tokenizers 0.20.4",
+ "tts-core",
+ "tts-nn",
+]
 
 [[package]]
 name = "autocfg"
@@ -364,7 +350,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cosy"
+name = "cosyvoice"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1872,9 +1858,9 @@ dependencies = [
 name = "tts-engines"
 version = "0.1.0"
 dependencies = [
- "a8",
  "anyhow",
- "cosy",
+ "audio8",
+ "cosyvoice",
  "tts-core",
 ]
 
@@ -1887,6 +1873,20 @@ dependencies = [
  "candle-metal-kernels",
  "candle-nn",
  "objc2-metal",
+]
+
+[[package]]
+name = "tts-probe"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "audio8",
+ "candle-core",
+ "candle-nn",
+ "cosyvoice",
+ "tts-bench",
+ "tts-core",
+ "tts-nn",
 ]
 
 [[package]]

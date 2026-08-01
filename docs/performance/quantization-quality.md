@@ -2,7 +2,7 @@
 
 The requirement is speed at near-zero voice degradation, so degradation was
 measured rather than inferred. Probes: `qroundtrip` (Rust, candle's own quantizer),
-`oracle/quality_ar.py` (torch, greedy generation + distributional metrics),
+`references/audio8/quality_ar.py` (torch, greedy generation + distributional metrics),
 faster-whisper `small.en` from the CosyVoice align venv for intelligibility.
 
 ## Verdict

@@ -25,22 +25,27 @@ else
   echo "tests FAILED"; fail=1
 fi
 
-say "Clippy and formatting"
-cargo fmt --check 2>/dev/null || echo "note: cargo fmt would reformat some files"
-cargo clippy --release --all-targets --quiet 2>&1 | grep -E "^(warning|error)" | head -5 || true
+say "Clippy and formatting (advisory)"
+if cargo fmt --check >/dev/null 2>&1; then
+  echo "formatting clean"
+else
+  echo "note: \`cargo fmt\` would reformat some files"
+fi
+lints=$(cargo clippy --release --all-targets 2>&1 | grep -cE "^warning: [a-z]" || true)
+echo "clippy: $lints lint(s)"
 
 say "Audio8 fixture gate"
-if [ -f fixtures/oracle.safetensors ] && [ -f oracle/weights/codec.safetensors ]; then
-  cargo run -q -p a8 --release --bin a8-validate || fail=1
+if [ -f fixtures/audio8/oracle.safetensors ] && [ -f references/audio8/weights/codec.safetensors ]; then
+  cargo run -q -p audio8 --release --bin audio8-validate || fail=1
 else
-  skip "fixtures/oracle.safetensors or oracle/weights/codec.safetensors missing"
+  skip "fixtures/audio8/oracle.safetensors or references/audio8/weights/codec.safetensors missing"
 fi
 
 say "CosyVoice fixture gate"
-if [ -f fixtures-cosy/oracle.safetensors ] && [ -d oracle-cosy/weights ]; then
-  cargo run -q -p cosy --release --bin cosy-validate || fail=1
+if [ -f fixtures/cosyvoice/oracle.safetensors ] && [ -d references/cosyvoice/weights ]; then
+  cargo run -q -p cosyvoice --release --bin cosyvoice-validate || fail=1
 else
-  skip "fixtures-cosy/oracle.safetensors or oracle-cosy/weights missing"
+  skip "fixtures/cosyvoice/oracle.safetensors or references/cosyvoice/weights missing"
 fi
 
 say "End-to-end renders"
@@ -48,9 +53,11 @@ mkdir -p target/gate
 for spec in "audio8:voices/cosy-default" "cosyvoice:voices/cosy-default-cosyvoice"; do
   id="${spec%%:*}"; voice="${spec##*:}"
   if [ -d "$voice" ]; then
-    cargo run -q -p tts-cli --release -- speak \
+    if ! cargo run -q -p tts-cli --release -- speak \
       --engine "$id" --voice "$voice" --text-file examples/senior.txt \
-      --out "target/gate/$id.wav" || fail=1
+      --out "target/gate/$id.wav"; then
+      echo "render FAILED for $id"; fail=1
+    fi
   else
     skip "$id: voice asset $voice missing"
   fi

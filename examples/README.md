@@ -4,7 +4,7 @@ One passage, both engines, and the PyTorch controls they are measured against.
 
 **The audio here is not tracked** — 34 MB that changes with every sampler, seed and engine
 change. `scripts/render-examples.sh` regenerates the Rust ones; the PyTorch controls come
-from `oracle/synthesize.py` and `oracle-cosy/reference_render.py` (see "Reproducing"
+from `references/audio8/synthesize.py` and `references/cosyvoice/reference_render.py` (see "Reproducing"
 below). `senior.txt` is tracked, and so is the table of what each render *was*, because
 that is the part worth keeping.
 
@@ -79,7 +79,7 @@ cargo run -p tts-cli --release -- speak --engine cosyvoice \
     --out examples/cosy_senior.wav
 ```
 
-The Audio8 PyTorch reference, from `oracle/`:
+The Audio8 PyTorch reference, from `references/audio8/`:
 
 ```
 # Audio8's own voice
@@ -92,7 +92,7 @@ C=../../CosyVoice
     --out ../examples/senior_cosyvoice.wav --batch 4 \
     --reference-audio $C/asset/default_voice.wav \
     --reference-text $C/asset/default_voice.txt \
-    --save-reference-codes ../fixtures/default_voice_codes.safetensors
+    --save-reference-codes ../fixtures/audio8/default_voice_codes.safetensors
 ```
 
 `--save-reference-codes` is the only step that needs the codec *encoder*, which is why the
@@ -102,7 +102,7 @@ The CosyVoice PyTorch control, from the CosyVoice checkout:
 
 ```
 PYTHONPATH=.:third_party/Matcha-TTS .venv/bin/python \
-    <repo>/oracle-cosy/reference_render.py \
+    <repo>/references/cosyvoice/reference_render.py \
     --model-dir pretrained_models/Fun-CosyVoice3-0.5B \
     --text-file <repo>/examples/senior.txt \
     --prompt-wav asset/default_voice.wav --prompt-text-file asset/default_voice.txt \
@@ -115,11 +115,11 @@ implementation and not in how the text was cut up.
 Scoring:
 
 ```
-oracle/.venv/bin/python oracle/verify_voice.py \
+references/audio8/.venv/bin/python references/audio8/verify_voice.py \
     --reference ../CosyVoice/asset/default_voice.wav examples/*.wav
 
 # from the CosyVoice venv, which has openai-whisper
-.venv/bin/python <repo>/oracle-cosy/wer.py \
+.venv/bin/python <repo>/references/cosyvoice/wer.py \
     --text-file <repo>/examples/senior.txt <repo>/examples/cosy_senior.wav
 ```
 

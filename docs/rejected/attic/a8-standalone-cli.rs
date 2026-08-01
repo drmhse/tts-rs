@@ -1,17 +1,17 @@
-//! `a8` — text to 44.1 kHz speech, one process, no supervisor.
+//! `audio8` — text to 44.1 kHz speech, one process, no supervisor.
 //!
 //! Run:
-//!   cargo run -p a8 --release --bin a8 -- \
+//!   cargo run -p audio8 --release --bin a8 -- \
 //!       --text-file examples/senior.txt --out examples/senior_rust.wav \
-//!       --reference-codes fixtures/default_voice_codes.safetensors \
+//!       --reference-codes fixtures/audio8/default_voice_codes.safetensors \
 //!       --reference-text ../CosyVoice/asset/default_voice.txt
 
-use a8::ar::{GenConfig, Model};
-use a8::cfg;
-use a8::codec::Codec;
-use a8::prompt::{load_reference_codes, segment, PromptBuilder};
-use a8::sample::Rng;
-use a8::wav;
+use audio8::ar::{GenConfig, Model};
+use audio8::cfg;
+use audio8::codec::Codec;
+use audio8::prompt::{load_reference_codes, segment, PromptBuilder};
+use audio8::sample::Rng;
+use audio8::wav;
 use anyhow::Result;
 use candle_core::quantized::GgmlDType;
 use candle_core::Device;
@@ -30,11 +30,11 @@ struct Args {
     #[arg(long)]
     out: PathBuf,
 
-    #[arg(long, default_value = "oracle/weights/model.safetensors")]
+    #[arg(long, default_value = "references/audio8/weights/model.safetensors")]
     weights: String,
-    #[arg(long, default_value = "oracle/weights/codec.safetensors")]
+    #[arg(long, default_value = "references/audio8/weights/codec.safetensors")]
     codec: String,
-    #[arg(long, default_value = "oracle/weights/tokenizer.json")]
+    #[arg(long, default_value = "references/audio8/weights/tokenizer.json")]
     tokenizer: String,
 
     /// Reference codes from `synthesize.py --save-reference-codes`.

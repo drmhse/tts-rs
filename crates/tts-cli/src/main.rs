@@ -52,7 +52,7 @@ struct Speak {
     /// Engine model root; defaults per engine.
     #[arg(long)]
     model_root: Option<PathBuf>,
-    /// Override a specific file, e.g. `--set codec=oracle/weights/codec.safetensors`.
+    /// Override a specific file, e.g. `--set codec=references/audio8/weights/codec.safetensors`.
     #[arg(long = "set", value_parser = parse_override)]
     overrides: Vec<(String, PathBuf)>,
 

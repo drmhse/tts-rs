@@ -6,9 +6,9 @@ members = [
     "crates/tts-bench",
     "crates/tts-engines",
     "crates/tts-cli",
-    "crates/a8",
-    "crates/cosy",
-    "crates/a8-probe",
+    "crates/audio8",
+    "crates/cosyvoice",
+    "crates/tts-probe",
 ]
 
 [workspace.package]

@@ -189,7 +189,7 @@ about 6 ms, but im2col measured 95.40 ms against a direct conv's 59.78 ms — so
 unaccounted for, and 17 GFLOP in 89 ms is 0.19 TFLOP/s, which is not what memory traffic looks
 like.
 
-Splitting the route in two settles it (`a8-probe --bin convgemm`, canary 60.0 ms both ends):
+Splitting the route in two settles it (`tts-probe --bin convgemm`, canary 60.0 ms both ends):
 
 | half of the GEMM route, 96ch @ 131072 | ms |
 |---|---|

@@ -7,9 +7,9 @@ license.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 tts-core = { path = "../tts-core" }
-a8 = { path = "../a8" }
-cosy = { path = "../cosy" }
+audio8 = { path = "../audio8" }
+cosyvoice = { path = "../cosyvoice" }
 
 [features]
 default = ["metal"]
-metal = ["a8/metal", "cosy/metal", "tts-core/metal"]
+metal = ["audio8/metal", "cosyvoice/metal", "tts-core/metal"]

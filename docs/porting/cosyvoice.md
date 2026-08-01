@@ -12,15 +12,15 @@ Python at runtime. All 25 fixture checks pass.
 | runtime deps beyond weights | none | none (was 997 MB of ONNX) |
 
 ```
-cargo run -p cosy --release --bin cosy-validate     # the fixture gate, 27 checks
-cargo run -p cosy --release --bin cosy-bench        # where the time goes
+cargo run -p cosyvoice --release --bin cosyvoice-validate     # the fixture gate, 27 checks
+cargo run -p cosyvoice --release --bin cosyvoice-bench        # where the time goes
 cargo run -p tts-cli --release -- speak --engine cosyvoice \
     --text-file examples/senior.txt --voice voices/cosy-default-cosyvoice --out out.wav
 ```
 
 ## Validation
 
-Per-stage, against `fixtures-cosy/oracle.safetensors`. Deliberately per-stage: a
+Per-stage, against `fixtures/cosyvoice/oracle.safetensors`. Deliberately per-stage: a
 whole-pipeline mismatch says nothing about which of three models is wrong, and this port
 needed exactly that discrimination twice.
 
@@ -75,7 +75,7 @@ Voice fidelity against the reference clip, and intelligibility against the input
 | CosyVoice, stock PyTorch, same text | 192.8 Hz | **+13.0** | 0.9980 | 0.008 |
 | Audio8, this port | 177.8 Hz | −2.0 | 0.9969 | 0.008 |
 
-WER is against the input text via `whisper small.en` (`oracle-cosy/wer.py`), 133 words. Not
+WER is against the input text via `whisper small.en` (`references/cosyvoice/wer.py`), 133 words. Not
 comparable to the 0.031 quoted elsewhere in this repo for Audio8, which was measured with
 WhisperX — a different recogniser gives a different number and only same-recogniser
 comparisons mean anything. On this passage the port transcribed with **zero** errors and the
@@ -118,8 +118,8 @@ feed-forward pass.
 
 ### What was measured, and what it bought
 
-Starting point RTF 2.96; now 0.697. Every figure below is from `a8-probe --bin dit` or
-`cosy-bench`, interleaved and canary-checked.
+Starting point RTF 2.96; now 0.697. Every figure below is from `tts-probe --bin dit` or
+`cosyvoice-bench`, interleaved and canary-checked.
 
 | change | measured | kept |
 |---|---|---|
@@ -219,7 +219,7 @@ what any reasonable implementation would do, and it is a different model.
 
 **2. The two engines' RoPE conventions are opposite.** HF's Qwen2 uses `rotate_half`
 (half-split). Audio8's Fish-Speech weights use `torch.polar` (interleaved adjacent pairs).
-Same dim, same head count, same head_dim — and both run without error. Reusing `a8::ar`'s
+Same dim, same head count, same head_dim — and both run without error. Reusing `audio8::ar`'s
 `rope_i` here put the hidden state off by **rel 0.78**. Caught only because the fixture
 existed; there is no way to notice it from the audio.
 
