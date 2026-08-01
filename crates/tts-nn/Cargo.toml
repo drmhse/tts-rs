@@ -1,0 +1,21 @@
+[package]
+name = "tts-nn"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+anyhow = { workspace = true }
+
+# Only for `im2col`, which reuses candle's own Metal gather kernel rather than shipping
+# new shader source. Must be the exact version candle-core depends on, so that the
+# `metal::Buffer`/`Device` types are the same instance and not two copies of one crate.
+[target.'cfg(target_os = "macos")'.dependencies]
+candle-metal-kernels = { workspace = true }
+objc2-metal = "0.3.2"
+
+[features]
+default = ["metal"]
+metal = ["candle-core/metal", "candle-nn/metal"]

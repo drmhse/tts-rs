@@ -1,0 +1,7 @@
+{
+  "engine": "audio8",
+  "name": "cosy-default",
+  "text": "Hi there! We're introducing a new feature where I can read ideas and topics allowed with a natural, human-like voice. Before you get started, please take a moment to go over this important information.",
+  "seconds": 11.76,
+  "notes": "encoded from default_voice.wav at 44100 Hz by oracle/export_voice.py"
+}

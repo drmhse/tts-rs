@@ -1,0 +1,2248 @@
+{
+  "decoder.model.0.conv.bias": {
+    "shape": [
+      1536
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.0.conv.weight": {
+    "shape": [
+      1536,
+      1024,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.0.alpha": {
+    "shape": [
+      1,
+      1536,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.1.conv.bias": {
+    "shape": [
+      768
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.1.conv.weight": {
+    "shape": [
+      1536,
+      768,
+      16
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.2.block.0.alpha": {
+    "shape": [
+      1,
+      768,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.2.block.1.conv.bias": {
+    "shape": [
+      768
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.2.block.1.conv.weight": {
+    "shape": [
+      768,
+      768,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.2.block.2.alpha": {
+    "shape": [
+      1,
+      768,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.2.block.3.conv.bias": {
+    "shape": [
+      768
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.2.block.3.conv.weight": {
+    "shape": [
+      768,
+      768,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.3.block.0.alpha": {
+    "shape": [
+      1,
+      768,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.3.block.1.conv.bias": {
+    "shape": [
+      768
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.3.block.1.conv.weight": {
+    "shape": [
+      768,
+      768,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.3.block.2.alpha": {
+    "shape": [
+      1,
+      768,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.3.block.3.conv.bias": {
+    "shape": [
+      768
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.3.block.3.conv.weight": {
+    "shape": [
+      768,
+      768,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.4.block.0.alpha": {
+    "shape": [
+      1,
+      768,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.4.block.1.conv.bias": {
+    "shape": [
+      768
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.4.block.1.conv.weight": {
+    "shape": [
+      768,
+      768,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.4.block.2.alpha": {
+    "shape": [
+      1,
+      768,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.4.block.3.conv.bias": {
+    "shape": [
+      768
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.1.block.4.block.3.conv.weight": {
+    "shape": [
+      768,
+      768,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.0.alpha": {
+    "shape": [
+      1,
+      768,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.1.conv.bias": {
+    "shape": [
+      384
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.1.conv.weight": {
+    "shape": [
+      768,
+      384,
+      16
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.2.block.0.alpha": {
+    "shape": [
+      1,
+      384,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.2.block.1.conv.bias": {
+    "shape": [
+      384
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.2.block.1.conv.weight": {
+    "shape": [
+      384,
+      384,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.2.block.2.alpha": {
+    "shape": [
+      1,
+      384,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.2.block.3.conv.bias": {
+    "shape": [
+      384
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.2.block.3.conv.weight": {
+    "shape": [
+      384,
+      384,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.3.block.0.alpha": {
+    "shape": [
+      1,
+      384,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.3.block.1.conv.bias": {
+    "shape": [
+      384
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.3.block.1.conv.weight": {
+    "shape": [
+      384,
+      384,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.3.block.2.alpha": {
+    "shape": [
+      1,
+      384,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.3.block.3.conv.bias": {
+    "shape": [
+      384
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.3.block.3.conv.weight": {
+    "shape": [
+      384,
+      384,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.4.block.0.alpha": {
+    "shape": [
+      1,
+      384,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.4.block.1.conv.bias": {
+    "shape": [
+      384
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.4.block.1.conv.weight": {
+    "shape": [
+      384,
+      384,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.4.block.2.alpha": {
+    "shape": [
+      1,
+      384,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.4.block.3.conv.bias": {
+    "shape": [
+      384
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.2.block.4.block.3.conv.weight": {
+    "shape": [
+      384,
+      384,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.0.alpha": {
+    "shape": [
+      1,
+      384,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.1.conv.bias": {
+    "shape": [
+      192
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.1.conv.weight": {
+    "shape": [
+      384,
+      192,
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.2.block.0.alpha": {
+    "shape": [
+      1,
+      192,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.2.block.1.conv.bias": {
+    "shape": [
+      192
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.2.block.1.conv.weight": {
+    "shape": [
+      192,
+      192,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.2.block.2.alpha": {
+    "shape": [
+      1,
+      192,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.2.block.3.conv.bias": {
+    "shape": [
+      192
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.2.block.3.conv.weight": {
+    "shape": [
+      192,
+      192,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.3.block.0.alpha": {
+    "shape": [
+      1,
+      192,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.3.block.1.conv.bias": {
+    "shape": [
+      192
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.3.block.1.conv.weight": {
+    "shape": [
+      192,
+      192,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.3.block.2.alpha": {
+    "shape": [
+      1,
+      192,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.3.block.3.conv.bias": {
+    "shape": [
+      192
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.3.block.3.conv.weight": {
+    "shape": [
+      192,
+      192,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.4.block.0.alpha": {
+    "shape": [
+      1,
+      192,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.4.block.1.conv.bias": {
+    "shape": [
+      192
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.4.block.1.conv.weight": {
+    "shape": [
+      192,
+      192,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.4.block.2.alpha": {
+    "shape": [
+      1,
+      192,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.4.block.3.conv.bias": {
+    "shape": [
+      192
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.3.block.4.block.3.conv.weight": {
+    "shape": [
+      192,
+      192,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.0.alpha": {
+    "shape": [
+      1,
+      192,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.1.conv.bias": {
+    "shape": [
+      96
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.1.conv.weight": {
+    "shape": [
+      192,
+      96,
+      4
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.2.block.0.alpha": {
+    "shape": [
+      1,
+      96,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.2.block.1.conv.bias": {
+    "shape": [
+      96
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.2.block.1.conv.weight": {
+    "shape": [
+      96,
+      96,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.2.block.2.alpha": {
+    "shape": [
+      1,
+      96,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.2.block.3.conv.bias": {
+    "shape": [
+      96
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.2.block.3.conv.weight": {
+    "shape": [
+      96,
+      96,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.3.block.0.alpha": {
+    "shape": [
+      1,
+      96,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.3.block.1.conv.bias": {
+    "shape": [
+      96
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.3.block.1.conv.weight": {
+    "shape": [
+      96,
+      96,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.3.block.2.alpha": {
+    "shape": [
+      1,
+      96,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.3.block.3.conv.bias": {
+    "shape": [
+      96
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.3.block.3.conv.weight": {
+    "shape": [
+      96,
+      96,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.4.block.0.alpha": {
+    "shape": [
+      1,
+      96,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.4.block.1.conv.bias": {
+    "shape": [
+      96
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.4.block.1.conv.weight": {
+    "shape": [
+      96,
+      96,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.4.block.2.alpha": {
+    "shape": [
+      1,
+      96,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.4.block.3.conv.bias": {
+    "shape": [
+      96
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.4.block.4.block.3.conv.weight": {
+    "shape": [
+      96,
+      96,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.5.alpha": {
+    "shape": [
+      1,
+      96,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.6.conv.bias": {
+    "shape": [
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "decoder.model.6.conv.weight": {
+    "shape": [
+      1,
+      96,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.0.0.conv.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.0.0.conv.weight": {
+    "shape": [
+      1024,
+      1024,
+      2
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.0.1.dwconv.conv.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.0.1.dwconv.conv.weight": {
+    "shape": [
+      1024,
+      1,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.0.1.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.0.1.norm.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.0.1.norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.0.1.pwconv1.bias": {
+    "shape": [
+      4096
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.0.1.pwconv1.weight": {
+    "shape": [
+      4096,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.0.1.pwconv2.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.0.1.pwconv2.weight": {
+    "shape": [
+      1024,
+      4096
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.1.0.conv.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.1.0.conv.weight": {
+    "shape": [
+      1024,
+      1024,
+      2
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.1.1.dwconv.conv.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.1.1.dwconv.conv.weight": {
+    "shape": [
+      1024,
+      1,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.1.1.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.1.1.norm.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.1.1.norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.1.1.pwconv1.bias": {
+    "shape": [
+      4096
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.1.1.pwconv1.weight": {
+    "shape": [
+      4096,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.1.1.pwconv2.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.downsample.1.1.pwconv2.weight": {
+    "shape": [
+      1024,
+      4096
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.0.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.0.attention.wqkv.weight": {
+    "shape": [
+      2048,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.0.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.0.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.0.feed_forward.w1.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.0.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      1216
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.0.feed_forward.w3.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.0.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.0.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.1.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.1.attention.wqkv.weight": {
+    "shape": [
+      2048,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.1.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.1.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.1.feed_forward.w1.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.1.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      1216
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.1.feed_forward.w3.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.1.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.1.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.2.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.2.attention.wqkv.weight": {
+    "shape": [
+      2048,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.2.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.2.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.2.feed_forward.w1.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.2.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      1216
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.2.feed_forward.w3.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.2.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.2.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.3.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.3.attention.wqkv.weight": {
+    "shape": [
+      2048,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.3.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.3.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.3.feed_forward.w1.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.3.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      1216
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.3.feed_forward.w3.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.3.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.3.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.4.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.4.attention.wqkv.weight": {
+    "shape": [
+      2048,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.4.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.4.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.4.feed_forward.w1.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.4.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      1216
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.4.feed_forward.w3.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.4.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.4.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.5.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.5.attention.wqkv.weight": {
+    "shape": [
+      2048,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.5.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.5.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.5.feed_forward.w1.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.5.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      1216
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.5.feed_forward.w3.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.5.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.5.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.6.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.6.attention.wqkv.weight": {
+    "shape": [
+      2048,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.6.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.6.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.6.feed_forward.w1.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.6.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      1216
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.6.feed_forward.w3.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.6.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.6.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.7.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.7.attention.wqkv.weight": {
+    "shape": [
+      2048,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.7.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.7.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.7.feed_forward.w1.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.7.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      1216
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.7.feed_forward.w3.weight": {
+    "shape": [
+      1216,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.7.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.layers.7.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.post_module.norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.0.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.0.attention.wqkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.0.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.0.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.0.feed_forward.w1.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.0.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      3072
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.0.feed_forward.w3.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.0.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.0.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.1.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.1.attention.wqkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.1.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.1.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.1.feed_forward.w1.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.1.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      3072
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.1.feed_forward.w3.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.1.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.1.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.2.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.2.attention.wqkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.2.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.2.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.2.feed_forward.w1.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.2.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      3072
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.2.feed_forward.w3.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.2.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.2.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.3.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.3.attention.wqkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.3.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.3.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.3.feed_forward.w1.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.3.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      3072
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.3.feed_forward.w3.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.3.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.3.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.4.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.4.attention.wqkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.4.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.4.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.4.feed_forward.w1.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.4.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      3072
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.4.feed_forward.w3.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.4.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.4.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.5.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.5.attention.wqkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.5.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.5.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.5.feed_forward.w1.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.5.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      3072
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.5.feed_forward.w3.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.5.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.5.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.6.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.6.attention.wqkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.6.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.6.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.6.feed_forward.w1.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.6.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      3072
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.6.feed_forward.w3.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.6.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.6.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.7.attention.wo.weight": {
+    "shape": [
+      1024,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.7.attention.wqkv.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.7.attention_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.7.attention_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.7.feed_forward.w1.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.7.feed_forward.w2.weight": {
+    "shape": [
+      1024,
+      3072
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.7.feed_forward.w3.weight": {
+    "shape": [
+      3072,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.7.ffn_layer_scale.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.layers.7.ffn_norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.pre_module.norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.0.codebook.weight": {
+    "shape": [
+      1024,
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.0.in_proj.bias": {
+    "shape": [
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.0.in_proj.weight": {
+    "shape": [
+      8,
+      1024,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.0.out_proj.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.0.out_proj.weight": {
+    "shape": [
+      1024,
+      8,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.1.codebook.weight": {
+    "shape": [
+      1024,
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.1.in_proj.bias": {
+    "shape": [
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.1.in_proj.weight": {
+    "shape": [
+      8,
+      1024,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.1.out_proj.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.1.out_proj.weight": {
+    "shape": [
+      1024,
+      8,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.2.codebook.weight": {
+    "shape": [
+      1024,
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.2.in_proj.bias": {
+    "shape": [
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.2.in_proj.weight": {
+    "shape": [
+      8,
+      1024,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.2.out_proj.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.2.out_proj.weight": {
+    "shape": [
+      1024,
+      8,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.3.codebook.weight": {
+    "shape": [
+      1024,
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.3.in_proj.bias": {
+    "shape": [
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.3.in_proj.weight": {
+    "shape": [
+      8,
+      1024,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.3.out_proj.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.3.out_proj.weight": {
+    "shape": [
+      1024,
+      8,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.4.codebook.weight": {
+    "shape": [
+      1024,
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.4.in_proj.bias": {
+    "shape": [
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.4.in_proj.weight": {
+    "shape": [
+      8,
+      1024,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.4.out_proj.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.4.out_proj.weight": {
+    "shape": [
+      1024,
+      8,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.5.codebook.weight": {
+    "shape": [
+      1024,
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.5.in_proj.bias": {
+    "shape": [
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.5.in_proj.weight": {
+    "shape": [
+      8,
+      1024,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.5.out_proj.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.5.out_proj.weight": {
+    "shape": [
+      1024,
+      8,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.6.codebook.weight": {
+    "shape": [
+      1024,
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.6.in_proj.bias": {
+    "shape": [
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.6.in_proj.weight": {
+    "shape": [
+      8,
+      1024,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.6.out_proj.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.6.out_proj.weight": {
+    "shape": [
+      1024,
+      8,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.7.codebook.weight": {
+    "shape": [
+      1024,
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.7.in_proj.bias": {
+    "shape": [
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.7.in_proj.weight": {
+    "shape": [
+      8,
+      1024,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.7.out_proj.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.7.out_proj.weight": {
+    "shape": [
+      1024,
+      8,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.8.codebook.weight": {
+    "shape": [
+      1024,
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.8.in_proj.bias": {
+    "shape": [
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.8.in_proj.weight": {
+    "shape": [
+      8,
+      1024,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.8.out_proj.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.quantizer.quantizers.8.out_proj.weight": {
+    "shape": [
+      1024,
+      8,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.semantic_quantizer.quantizers.0.codebook.weight": {
+    "shape": [
+      4096,
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.semantic_quantizer.quantizers.0.in_proj.bias": {
+    "shape": [
+      8
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.semantic_quantizer.quantizers.0.in_proj.weight": {
+    "shape": [
+      8,
+      1024,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.semantic_quantizer.quantizers.0.out_proj.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.semantic_quantizer.quantizers.0.out_proj.weight": {
+    "shape": [
+      1024,
+      8,
+      1
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.0.0.conv.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.0.0.conv.weight": {
+    "shape": [
+      1024,
+      1024,
+      2
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.0.1.dwconv.conv.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.0.1.dwconv.conv.weight": {
+    "shape": [
+      1024,
+      1,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.0.1.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.0.1.norm.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.0.1.norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.0.1.pwconv1.bias": {
+    "shape": [
+      4096
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.0.1.pwconv1.weight": {
+    "shape": [
+      4096,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.0.1.pwconv2.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.0.1.pwconv2.weight": {
+    "shape": [
+      1024,
+      4096
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.1.0.conv.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.1.0.conv.weight": {
+    "shape": [
+      1024,
+      1024,
+      2
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.1.1.dwconv.conv.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.1.1.dwconv.conv.weight": {
+    "shape": [
+      1024,
+      1,
+      7
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.1.1.gamma": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.1.1.norm.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.1.1.norm.weight": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.1.1.pwconv1.bias": {
+    "shape": [
+      4096
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.1.1.pwconv1.weight": {
+    "shape": [
+      4096,
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.1.1.pwconv2.bias": {
+    "shape": [
+      1024
+    ],
+    "dtype": "torch.float32"
+  },
+  "quantizer.upsample.1.1.pwconv2.weight": {
+    "shape": [
+      1024,
+      4096
+    ],
+    "dtype": "torch.float32"
+  }
+}

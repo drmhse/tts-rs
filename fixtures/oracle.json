@@ -1,0 +1,264 @@
+{
+  "meta": {
+    "text": "Welcome to Audio8 TTS.",
+    "device": "cpu",
+    "dtype": "float32",
+    "revision": "1b17c91db5f4dccb6914aa4aa5cb0e56661a6c17",
+    "prompt_width": 27
+  },
+  "tensors": {
+    "codec_syn.codes": {
+      "shape": [
+        1,
+        10,
+        8
+      ],
+      "dtype": "torch.int64"
+    },
+    "codec_syn.decoder.model.0": {
+      "shape": [
+        1,
+        1536,
+        96
+      ],
+      "dtype": "torch.float32"
+    },
+    "codec_syn.decoder.model.1": {
+      "shape": [
+        1,
+        768,
+        768
+      ],
+      "dtype": "torch.float32"
+    },
+    "codec_syn.decoder.model.2": {
+      "shape": [
+        1,
+        384,
+        6144
+      ],
+      "dtype": "torch.float32"
+    },
+    "codec_syn.decoder.model.3": {
+      "shape": [
+        1,
+        192,
+        24576
+      ],
+      "dtype": "torch.float32"
+    },
+    "codec_syn.decoder.model.4": {
+      "shape": [
+        1,
+        96,
+        49152
+      ],
+      "dtype": "torch.float32"
+    },
+    "codec_syn.quantizer.post_module": {
+      "shape": [
+        1,
+        1024,
+        24
+      ],
+      "dtype": "torch.float32"
+    },
+    "codec_syn.quantizer.upsample": {
+      "shape": [
+        1,
+        1024,
+        96
+      ],
+      "dtype": "torch.float32"
+    },
+    "codec_syn.wav": {
+      "shape": [
+        1,
+        1,
+        16384
+      ],
+      "dtype": "torch.float32"
+    },
+    "e2e.codes": {
+      "shape": [
+        1,
+        10,
+        24
+      ],
+      "dtype": "torch.int64"
+    },
+    "e2e.wav": {
+      "shape": [
+        1,
+        1,
+        49152
+      ],
+      "dtype": "torch.float32"
+    },
+    "fast.codebooks": {
+      "shape": [
+        1,
+        10
+      ],
+      "dtype": "torch.int64"
+    },
+    "fast.fast_layers.0": {
+      "shape": [
+        10,
+        1,
+        1,
+        896
+      ],
+      "dtype": "torch.float32"
+    },
+    "fast.fast_layers.3": {
+      "shape": [
+        10,
+        1,
+        1,
+        896
+      ],
+      "dtype": "torch.float32"
+    },
+    "fast.fast_norm": {
+      "shape": [
+        10,
+        1,
+        1,
+        896
+      ],
+      "dtype": "torch.float32"
+    },
+    "fast.fast_output": {
+      "shape": [
+        10,
+        1,
+        1,
+        4096
+      ],
+      "dtype": "torch.float32"
+    },
+    "fast.fast_project_in": {
+      "shape": [
+        1,
+        1,
+        896
+      ],
+      "dtype": "torch.float32"
+    },
+    "fast.semantic": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.int64"
+    },
+    "fast.slow_hidden": {
+      "shape": [
+        1,
+        1,
+        896
+      ],
+      "dtype": "torch.float32"
+    },
+    "prompt.attention_mask": {
+      "shape": [
+        1,
+        27
+      ],
+      "dtype": "torch.int64"
+    },
+    "prompt.input_ids": {
+      "shape": [
+        1,
+        11,
+        27
+      ],
+      "dtype": "torch.int64"
+    },
+    "prompt.prefix_attention_mask": {
+      "shape": [
+        1,
+        27
+      ],
+      "dtype": "torch.int64"
+    },
+    "prompt.prefix_input_ids": {
+      "shape": [
+        1,
+        27
+      ],
+      "dtype": "torch.int64"
+    },
+    "prompt.suffix_input_ids": {
+      "shape": [
+        1,
+        0
+      ],
+      "dtype": "torch.int64"
+    },
+    "slow.embeddings": {
+      "shape": [
+        1,
+        27,
+        896
+      ],
+      "dtype": "torch.float32"
+    },
+    "slow.hidden_states": {
+      "shape": [
+        1,
+        27,
+        896
+      ],
+      "dtype": "torch.float32"
+    },
+    "slow.layers.0": {
+      "shape": [
+        1,
+        27,
+        896
+      ],
+      "dtype": "torch.float32"
+    },
+    "slow.layers.1": {
+      "shape": [
+        1,
+        27,
+        896
+      ],
+      "dtype": "torch.float32"
+    },
+    "slow.layers.11": {
+      "shape": [
+        1,
+        27,
+        896
+      ],
+      "dtype": "torch.float32"
+    },
+    "slow.layers.23": {
+      "shape": [
+        1,
+        27,
+        896
+      ],
+      "dtype": "torch.float32"
+    },
+    "slow.logits": {
+      "shape": [
+        1,
+        27,
+        155776
+      ],
+      "dtype": "torch.float32"
+    },
+    "slow.norm": {
+      "shape": [
+        1,
+        27,
+        896
+      ],
+      "dtype": "torch.float32"
+    }
+  }
+}

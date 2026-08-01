@@ -1,0 +1,9 @@
+Why this concept changes preparation
+
+The word "senior" creates false confidence and false anxiety.
+
+Some candidates assume the title is earned by time. They have been employed for eight or ten years, have shipped many features, and have held the title before, so they expect the interview to recognize that history. Other candidates have done senior work without the title and understate themselves because their company leveled slowly or used different names.
+
+Interviews do not resolve that confusion by counting years. They look for evidence.
+
+A senior software engineer is trusted with problem areas, not merely tasks. The work is less fully specified. The consequences are broader. The engineer is expected to notice risk, shape the path, make trade-offs, communicate early, and leave the system or team better than they found it.

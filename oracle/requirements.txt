@@ -1,0 +1,18 @@
+# The Audio8 oracle environment: converting checkpoints, dumping fixtures, and the
+# reference PyTorch renders the Rust port is measured against.
+#
+# Pinned to what the numbers in docs/ were produced with. Nothing here is needed to
+# *run* the Rust engines — only to regenerate the fixtures they are gated on, and to
+# reproduce the PyTorch baselines.
+#
+# CosyVoice needs a *different* environment (python 3.10, torch 2.3.1) supplied by the
+# upstream CosyVoice repo, because its fixture dump imports CosyVoice model code. See
+# docs/setup.md.
+
+torch==2.13.0
+torchaudio==2.11.0
+transformers==4.57.6
+safetensors==0.8.0
+soundfile==0.14.0
+numpy==2.5.1
+huggingface_hub==0.36.2

@@ -1,0 +1,8 @@
+{
+  "engine": "cosyvoice",
+  "name": "cosy-default-cosyvoice",
+  "text": "Hi there! We're introducing a new feature where I can read ideas and topics allowed with a natural, human-like voice. Before you get started, please take a moment to go over this important information.",
+  "prompt_text": "You are a helpful assistant.<|endofprompt|>Hi there! We're introducing a new feature where I can read ideas and topics allowed with a natural, human-like voice. Before you get started, please take a moment to go over this important information.",
+  "seconds": 11.76,
+  "notes": "campplus + speech_tokenizer_v3 + mel from default_voice.wav; exported by oracle-cosy/export_voice.py so neither ONNX model is needed at runtime. prompt_text_tokens encode `prompt_text`, which carries the <|endofprompt|> marker the LLM asserts on; `text` is the plain transcript"
+}

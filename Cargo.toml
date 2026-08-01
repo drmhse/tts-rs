@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tts-core",
+    "crates/tts-nn",
+    "crates/tts-bench",
+    "crates/tts-engines",
+    "crates/tts-cli",
+    "crates/a8",
+    "crates/cosy",
+    "crates/a8-probe",
+]
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"
+rust-version = "1.82"
+
+[workspace.dependencies]
+candle-core = "0.10.2"
+candle-nn = "0.10.2"
+candle-metal-kernels = "0.10.2"
+anyhow = "1"
+safetensors = "0.4"
+clap = { version = "4", features = ["derive"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"

@@ -1,0 +1,20 @@
+[package]
+name = "tts-cli"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true }
+tts-core = { path = "../tts-core" }
+tts-engines = { path = "../tts-engines" }
+candle-core = { workspace = true }
+
+[features]
+default = ["metal"]
+metal = ["tts-engines/metal", "tts-core/metal", "candle-core/metal"]
+
+[[bin]]
+name = "tts"
+path = "src/main.rs"

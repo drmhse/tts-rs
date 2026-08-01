@@ -1,0 +1,134 @@
+# tts-rs
+
+Local text-to-speech in Rust: text in, speech out, one process, bounded memory. Two
+engines behind one interface, both faster than real time on an M4, both gated against
+per-stage fp32 fixtures dumped from their PyTorch references.
+
+| engine | model | RTF | vs PyTorch | validation |
+|---|---|---|---|---|
+| `audio8` | [Audio8-TTS-Preview-0.6b](https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b), 601 M, 44.1 kHz | **0.499** | 2.62× | greedy generation **bit-identical** |
+| `cosyvoice` | `FunAudioLLM/Fun-CosyVoice3-0.5B`, 995 M, 24 kHz | **0.697** | 6.27× | teacher-forced argmax **105/105 identical** |
+
+## Quick start
+
+```sh
+./scripts/bootstrap.sh          # toolchain, checkpoint, codec conversion, build
+
+cargo run -p tts-cli --release -- speak \
+    --engine audio8 --voice voices/cosy-default \
+    --text "Hello from a fresh checkout." --out hello.wav
+```
+
+`bootstrap.sh` sets up Audio8 only. CosyVoice needs the upstream CosyVoice repository for
+its checkpoints — a few more commands, in **[docs/setup.md](docs/setup.md)**.
+
+```sh
+cargo run -p tts-cli --release -- engines                      # what is available
+cargo run -p tts-cli --release -- voice voices/cosy-default    # inspect an asset
+./scripts/gates.sh                                             # everything verifiable
+```
+
+## Using it as a library
+
+```rust
+use tts_core::{EngineConfig, SynthesisRequest, Voice};
+
+let config = EngineConfig::new(tts_engines::default_root("cosyvoice"));
+let engine = tts_engines::load("cosyvoice", &config)?;
+
+let voice = Voice::load("voices/cosy-default-cosyvoice")?;
+let request = SynthesisRequest::new("Hello from Rust.").with_voice(voice);
+engine.validate(&request)?;                 // rejects a mismatched asset up front
+
+let out = engine.synthesize(&request)?;
+tts_core::wav::write("hello.wav", &out.audio)?;
+println!("RTF {:.3}", out.stats.rtf(out.audio.seconds()));
+```
+
+That snippet is the doctest on `tts_engines`, so it is compiled on every `cargo test`
+rather than left to rot.
+
+Engines are chosen by string id at request time. A voice asset built for one engine is
+refused by another rather than silently substituted, and an engine that exists but cannot
+run yet reports `available: false` with a reason instead of disappearing from the list.
+
+## Where it landed
+
+Both on `examples/senior.txt` (132 words, 7 segments), M4 / 16 GB:
+
+| engine | reference | this port | |
+|---|---|---|---|
+| `audio8` | RTF 1.307 (PyTorch, bf16, MPS, batched) | **RTF 0.499** | **2.62× faster**, identical WER |
+| `cosyvoice` | RTF 4.370 (stock PyTorch — CPU-only, see below) | **RTF 0.697** | **6.27× faster**, WER 0.000–0.015 across seeds |
+
+The CosyVoice comparison carries a caveat worth stating up front: upstream's
+`CosyVoiceModel` hardcodes `cuda if available else cpu` and **has no MPS path at all**, so
+CPU is the only thing stock upstream can do here. The adapted service in `tts/CosyVoice`
+reaches RTF ~0.76 on MPS; this port is now faster than that. Details and the remaining
+levers are in [docs/porting/cosyvoice.md](docs/porting/cosyvoice.md).
+
+Model load is 1.0–1.5 s for Audio8 (including quantizing 417 M params) against 15–17 s for
+the PyTorch service's reload path. Memory is flat by construction: no MPSGraph cache, so
+no supervisor and no growth budget.
+
+## Documentation
+
+| | |
+|---|---|
+| [docs/setup.md](docs/setup.md) | from a fresh clone to working audio, in three levels |
+| [docs/status.md](docs/status.md) | **the map** — what exists, how it validates, how fast, what is left |
+| [docs/architecture.md](docs/architecture.md) | the engine trait, voice assets, why the crates split as they do |
+| [docs/benchmarking.md](docs/benchmarking.md) | how to measure on this hardware without fooling yourself |
+
+<details>
+<summary>Per-engine and per-investigation notes</summary>
+
+| | |
+|---|---|
+| [docs/porting/audio8.md](docs/porting/audio8.md) | architecture and eight ranked traps, written before any code |
+| [docs/porting/cosyvoice.md](docs/porting/cosyvoice.md) | the second engine: validation, speed, and nine silent traps |
+| [docs/performance/ar-loop.md](docs/performance/ar-loop.md) | the AR loop is 10–20× the codec; the levers, and two wrong conclusions |
+| [docs/performance/candle-on-metal.md](docs/performance/candle-on-metal.md) | where the time goes, and what candle does not fuse |
+| [docs/performance/quantization-quality.md](docs/performance/quantization-quality.md) | q8_0 costs nothing audible; why token identity is the wrong metric |
+| [docs/rejected/](docs/rejected/) | ONNX, CoreML, and an attic of experiments that did not work out |
+| [crates/a8-probe/README.md](crates/a8-probe/README.md) | the measurement binaries, indexed by the question each answers |
+| [examples/README.md](examples/README.md) | the renders, and how to reproduce them |
+
+</details>
+
+## Layout
+
+```
+crates/tts-core/     the Engine trait, voice assets, segmentation, WAV, the PRNG
+crates/tts-nn/       shared model machinery + the custom Metal kernels
+crates/tts-engines/  the registry — the one place that knows which engines exist
+crates/tts-cli/      the `tts` binary: engines / voice / speak
+crates/a8/           the Audio8 engine + its fixture gate
+crates/cosy/         the CosyVoice engine + its fixture gate and bench
+crates/tts-bench/    the thermally-honest measurement harness
+crates/a8-probe/     op-level benchmarks, one binary per question (see its README)
+oracle/              Audio8 PyTorch reference: conversion, fixtures, quality scripts
+oracle-cosy/         CosyVoice PyTorch reference: conversion, voice export, WER
+voices/              voice assets, one directory each (tracked — they are small)
+scripts/             bootstrap and verification
+```
+
+Weights, fixtures and virtualenvs are not tracked; `docs/setup.md` regenerates them.
+
+## Three things a reader should know up front
+
+**Audio8's reference sampler is broken under its own default dtype.** `_sample` draws its
+Gumbel noise at `dtype=probabilities.dtype`, so in bfloat16 the uniforms have ~256 distinct
+values and sampled output is unintelligible and never reaches EOS. Both implementations
+here draw in f32.
+
+**CosyVoice's harmonic phase is numerically degenerate in f32.** The reference accumulates
+phase to 1.7e7 radians, where one f32 ulp is a full radian. This port accumulates it on the
+host in f64 modulo one cycle — the only place either port is deliberately more accurate
+than its reference, and it moves *closer* to the reference's output, not further.
+
+**Timings on this hardware are only meaningful with a statement of what else was
+running.** An M4 under sustained GPU load drifts ~2×, which silently invalidated a
+session's worth of measurements, and an unsynchronised stage timer once misattributed 13%
+of a pipeline to the wrong stage. Both failure modes, and the protocol that catches them,
+are in [docs/benchmarking.md](docs/benchmarking.md).

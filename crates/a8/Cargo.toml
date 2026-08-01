@@ -1,0 +1,22 @@
+[package]
+name = "a8"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+anyhow = { workspace = true }
+tokenizers = { version = "0.20", default-features = false, features = ["onig"] }
+serde_json = "1"
+tts-core = { path = "../tts-core" }
+tts-nn = { path = "../tts-nn" }
+
+[features]
+default = ["metal"]
+metal = ["candle-core/metal", "candle-nn/metal", "tts-core/metal", "tts-nn/metal"]
+
+[[bin]]
+name = "a8-validate"
+path = "src/bin/validate.rs"

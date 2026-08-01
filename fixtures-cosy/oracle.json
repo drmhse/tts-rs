@@ -1,0 +1,274 @@
+{
+ "meta": {
+  "text": "Welcome to CosyVoice three, running on Apple Silicon.",
+  "voice": "cosy-default-cosyvoice",
+  "voice_text": "Hi there! We're introducing a new feature where I can read ideas and topics allowed with a natural, human-like voice. Before you get started, please take a moment to go over this important information.",
+  "seed": 0,
+  "device": "cpu",
+  "dtype": "float32",
+  "greedy_steps": 32,
+  "llm_greedy_tokens": 32,
+  "llm_tokens": 105,
+  "flow_mel_len1": 588,
+  "flow_mel_len2": 210,
+  "hift_upsample_total": 480
+ },
+ "sample_rate": 24000,
+ "tensors": {
+  "prompt.text_tokens": {
+   "shape": [
+    1,
+    12
+   ],
+   "dtype": "torch.int32"
+  },
+  "prompt.prompt_text_tokens": {
+   "shape": [
+    1,
+    48
+   ],
+   "dtype": "torch.int32"
+  },
+  "prompt.speech_tokens": {
+   "shape": [
+    1,
+    294
+   ],
+   "dtype": "torch.int32"
+  },
+  "prompt.speaker_embedding": {
+   "shape": [
+    1,
+    192
+   ],
+   "dtype": "torch.float32"
+  },
+  "prompt.prompt_mel": {
+   "shape": [
+    1,
+    588,
+    80
+   ],
+   "dtype": "torch.float32"
+  },
+  "llm.lm_input": {
+   "shape": [
+    1,
+    356,
+    896
+   ],
+   "dtype": "torch.float32"
+  },
+  "llm.prefill_hidden": {
+   "shape": [
+    1,
+    896
+   ],
+   "dtype": "torch.float32"
+  },
+  "llm.prefill_logits": {
+   "shape": [
+    1,
+    6761
+   ],
+   "dtype": "torch.float32"
+  },
+  "llm.greedy_tokens": {
+   "shape": [
+    1,
+    32
+   ],
+   "dtype": "torch.int32"
+  },
+  "llm.speech_tokens": {
+   "shape": [
+    1,
+    105
+   ],
+   "dtype": "torch.int32"
+  },
+  "llm.tf_logits": {
+   "shape": [
+    105,
+    6761
+   ],
+   "dtype": "torch.float32"
+  },
+  "llm.tf_argmax": {
+   "shape": [
+    1,
+    105
+   ],
+   "dtype": "torch.int32"
+  },
+  "flow.spks": {
+   "shape": [
+    1,
+    80
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.token_emb": {
+   "shape": [
+    1,
+    399,
+    80
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.lookahead": {
+   "shape": [
+    1,
+    399,
+    80
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.mu": {
+   "shape": [
+    1,
+    80,
+    798
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.cond": {
+   "shape": [
+    1,
+    80,
+    798
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.t_span": {
+   "shape": [
+    11
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.z": {
+   "shape": [
+    1,
+    80,
+    798
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.dit_time": {
+   "shape": [
+    2,
+    1024
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.dit_input": {
+   "shape": [
+    2,
+    798,
+    1024
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.dit_block0": {
+   "shape": [
+    2,
+    798,
+    1024
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.dit_block1": {
+   "shape": [
+    2,
+    798,
+    1024
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.dit_block10": {
+   "shape": [
+    2,
+    798,
+    1024
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.dit_block21": {
+   "shape": [
+    2,
+    798,
+    1024
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.dit_step0": {
+   "shape": [
+    2,
+    80,
+    798
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.mel_full": {
+   "shape": [
+    1,
+    80,
+    798
+   ],
+   "dtype": "torch.float32"
+  },
+  "flow.mel": {
+   "shape": [
+    1,
+    80,
+    210
+   ],
+   "dtype": "torch.float32"
+  },
+  "hift.nsf_noise": {
+   "shape": [
+    1,
+    100800,
+    9
+   ],
+   "dtype": "torch.float32"
+  },
+  "hift.f0": {
+   "shape": [
+    1,
+    210
+   ],
+   "dtype": "torch.float32"
+  },
+  "hift.f0_f32": {
+   "shape": [
+    1,
+    210
+   ],
+   "dtype": "torch.float32"
+  },
+  "hift.source": {
+   "shape": [
+    1,
+    1,
+    100800
+   ],
+   "dtype": "torch.float32"
+  },
+  "hift.mel_in": {
+   "shape": [
+    1,
+    80,
+    210
+   ],
+   "dtype": "torch.float32"
+  },
+  "hift.wav": {
+   "shape": [
+    1,
+    100800
+   ],
+   "dtype": "torch.float32"
+  }
+ }
+}
