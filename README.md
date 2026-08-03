@@ -86,8 +86,17 @@ reaches RTF ~0.76 on MPS; this port is now faster than that. Details and the rem
 levers are in [docs/porting/cosyvoice.md](docs/porting/cosyvoice.md).
 
 Model load is 1.0–1.5 s for Audio8 (including quantizing 417 M params) against 15–17 s for
-the PyTorch service's reload path. Memory is flat by construction: no MPSGraph cache, so
-no supervisor and no growth budget.
+the PyTorch service's reload path.
+
+**Memory is not characterised, and the earlier claim here that it was "flat by construction"
+was wrong.** There is no MPSGraph cache to reclaim, which is why there is no supervisor or
+recycle budget — but that is an argument, not a measurement, and long renders do use more
+than a short one. Two attempts to measure it both saturated: `/usr/bin/time -l` reports RSS,
+which cannot exceed what is resident and pinned at 3.59 GB across a 6x range of input; and
+`phys_footprint_peak` returned exactly 13.00 GB for three configurations that should differ
+enormously. What can be said: **one process renders 16 minutes of audio at RTF 0.54 on a
+16 GB machine without the system struggling, and two concurrent engines do not fit.**
+See [docs/performance/memory.md](docs/performance/memory.md).
 
 ## Documentation
 
@@ -108,6 +117,7 @@ no supervisor and no growth budget.
 | [docs/porting/cosyvoice.md](docs/porting/cosyvoice.md) | the second engine: validation, speed, and nine silent traps |
 | [docs/performance/ar-loop.md](docs/performance/ar-loop.md) | the AR loop is 10–20× the codec; the levers, and two wrong conclusions |
 | [docs/performance/candle-on-metal.md](docs/performance/candle-on-metal.md) | where the time goes, and what candle does not fuse |
+| [docs/performance/memory.md](docs/performance/memory.md) | what is known, and two metrics that saturated |
 | [docs/performance/quantization-quality.md](docs/performance/quantization-quality.md) | q8_0 costs nothing audible; why token identity is the wrong metric |
 | [docs/rejected/](docs/rejected/) | ONNX, CoreML, and an attic of experiments that did not work out |
 | [crates/tts-probe/README.md](crates/tts-probe/README.md) | the measurement binaries, indexed by the question each answers |

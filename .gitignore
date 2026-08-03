@@ -35,5 +35,9 @@ __pycache__/
 *.wav
 !/examples/cosy_short.wav
 
+# Narration output: converted text, rendered audio, and the per-run server logs
+# `scripts/narrate.sh` leaves behind. All regenerable from the source markdown.
+/narration/
+
 # macOS
 .DS_Store

@@ -111,8 +111,19 @@ pub struct CosyVoiceEngine {
     /// flow call. Slower — the voice prompt is re-decoded per segment — but it restores the
     /// per-segment silence gaps and bounds peak memory. `--set flow_per_segment=1`.
     flow_per_segment: bool,
-    /// Most segments decoded together in the LLM. `--set llm_batch=1` restores
+    /// Most segments decoded together in the LLM. `--set llm_batch=<n>`; `1` restores
     /// one-at-a-time decoding, which is what the batched path is compared against.
+    ///
+    /// **Bounded, and it must be.** Every lane carries its own KV cache —
+    /// `2 * N_KV * CACHE * HEAD_DIM * 4 bytes * LAYERS` = **101 MB per lane** — so batching
+    /// is not free in memory even though it is nearly free in time. Left unbounded this
+    /// batched one lane per segment, and a 16-minute chapter (118 segments) asked for
+    /// **11.9 GB of KV cache alone**, which on a 16 GB machine meant swap: the LLM stage
+    /// went from RTF 0.19 to 0.70 and the whole engine from 0.70 to 1.49.
+    ///
+    /// 8 matches Audio8's `DEFAULT_MAX_BATCH`, costs 0.81 GB, and keeps essentially all of
+    /// the batching win — the measured curve is already flat by 4-7 lanes
+    /// (`tts-probe --bin llmbatch`).
     llm_max_batch: usize,
     /// The device this engine's weights live on.
     ///
@@ -124,6 +135,9 @@ pub struct CosyVoiceEngine {
     /// The samplers carry RNG state, so a shared engine serialises requests.
     rng: Mutex<Rng>,
 }
+
+/// Segments decoded together in the LLM by default. See `llm_max_batch`.
+const DEFAULT_LLM_BATCH: usize = 8;
 
 impl CosyVoiceEngine {
     pub fn load(config: &EngineConfig) -> Result<Self> {
@@ -168,7 +182,7 @@ impl CosyVoiceEngine {
                 .and_then(|p| p.to_str())
                 .and_then(|v| v.parse::<usize>().ok())
                 .filter(|n| *n > 0)
-                .unwrap_or(usize::MAX),
+                .unwrap_or(DEFAULT_LLM_BATCH),
             rng: Mutex::new(Rng::new(1234)),
         })
     }

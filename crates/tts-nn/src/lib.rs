@@ -359,17 +359,66 @@ pub fn tap_major_weight(w: &Tensor) -> Result<Tensor> {
 /// the causal pad in, so `pad_with_zeros` disappears from the fast path. The `cat` form
 /// stays as the fallback for batched inputs and non-Metal devices.
 ///
-/// # Chunking along length was tried and reverted
+/// # Length is chunked, to bound peak memory
 ///
-/// im2col expands the input by `k`, so CosyVoice's `ups.0` (k=16) builds 658 MB of scratch
-/// at utterance length and the two stages behind it exceed 1 GB. Slicing the length to
-/// bound that is exact — each slice carries `(k-1)*dilation` samples of left context — and
-/// it looked justified while a CosyVoice vocoder regression was unexplained. It was not:
-/// the regression was thermal drift, and chunking costs Audio8's codec real time
-/// (RTF 0.156 -> 0.204, with the AR stage steady at 0.341 as a control). The unchunked
-/// GEMM also beats a direct conv by 2.5x to 5.0x at every `ups` shape *including* the
-/// 1.1 GB ones, so the large matrix is not the problem it looks like.
+/// im2col expands the input by `k`, so a wide late-stage conv wants a very large scratch
+/// buffer: 96 channels, k=7, one 5-second segment at 44.1 kHz is 592 MB, and candle rounds
+/// allocations with `next_power_of_two`, so it takes **1 GB**.
+///
+/// That matters more than it looks, because candle's Metal buffer pool has **no public way
+/// to release anything**. `MetalDevice::new_buffer` reuses a pooled buffer only when its
+/// `Arc::strong_count` has fallen to 1, `drop_unused_buffers` is private, and nothing in the
+/// public API trims the pool. So every large buffer that is ever live at the same time as
+/// another stays resident for the life of the process. Narrating a 16-minute chapter reached
+/// a **23 GB physical footprint on a 16 GB machine** and drove it into swap.
+///
+/// Chunking fixes that at the root: with a fixed column budget every im2col allocation is
+/// the *same size*, so the pool converges on a couple of buffers and is reused for every
+/// conv of every segment thereafter. Peak memory becomes a function of the budget rather
+/// than of the longest segment times the number of size classes.
+///
+/// It is exact — each slice carries `(k-1) * dilation` samples of left context, so the
+/// result is identical to the unchunked conv rather than merely close.
+///
+/// **This was reverted once, wrongly.** The first time round it was measured only on speed
+/// (RTF 0.156 -> 0.204 on Audio8's codec, with the AR stage steady at 0.341 as a control)
+/// and reverted for costing 31% of that stage. Nobody measured what it did for memory. A
+/// codec that is 31% slower and completes beats one that is faster and swaps.
 pub fn causal_conv1d_gemm(
+    x: &Tensor,
+    w_tap: &Tensor,
+    b: Option<&Tensor>,
+    k: usize,
+    dilation: usize,
+) -> Result<Tensor> {
+    let (_, cin, len) = x.dims3()?;
+    let cols_per_chunk = (GEMM_COL_BUDGET / (k * cin)).max(1);
+    if cols_per_chunk < len {
+        let pad = (k - 1) * dilation;
+        let mut pieces = Vec::new();
+        let mut start = 0;
+        while start < len {
+            let width = cols_per_chunk.min(len - start);
+            let ctx = pad.min(start);
+            let piece = x.narrow(2, start - ctx, ctx + width)?.contiguous()?;
+            let y = conv1d_gemm_whole(&piece, w_tap, b, k, dilation)?;
+            pieces.push(y.narrow(2, ctx, width)?);
+            start += width;
+        }
+        return Ok(Tensor::cat(&pieces, 2)?);
+    }
+    conv1d_gemm_whole(x, w_tap, b, k, dilation)
+}
+
+/// im2col elements per chunk, so every allocation lands in one `next_power_of_two` class.
+///
+/// 64 M floats is 256 MB. Chosen by sweeping against Audio8's codec: the budget has to be
+/// small enough that the pool holds a handful of buffers rather than one per segment
+/// length, and large enough that the GEMM shape stays good. `GEMM_COL_BUDGET` is the one
+/// knob that trades the codec's speed against peak footprint.
+const GEMM_COL_BUDGET: usize = 64 << 20;
+
+fn conv1d_gemm_whole(
     x: &Tensor,
     w_tap: &Tensor,
     b: Option<&Tensor>,

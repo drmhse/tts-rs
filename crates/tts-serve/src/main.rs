@@ -295,7 +295,9 @@ async fn render(app: &Arc<App>, req: TtsRequest) -> Result<Rendered, ApiError> {
 
     let wall = started.elapsed().as_secs_f64();
     let seconds = out.audio.seconds();
-    let wav = wav_bytes(&out.audio.samples, out.audio.sample_rate);
+    // One encoder, in tts-core: a second copy here silently disagreed with the CLI
+    // by 1 LSB because it truncated where that one rounds.
+    let wav = tts_core::wav::to_bytes(&out.audio);
     Ok(Rendered {
         wav,
         seconds,
@@ -304,39 +306,6 @@ async fn render(app: &Arc<App>, req: TtsRequest) -> Result<Rendered, ApiError> {
         samples: out.audio.samples,
         sample_rate: out.audio.sample_rate,
     })
-}
-
-/// A 16-bit PCM WAV in memory. `tts_core::wav` writes to a path; an HTTP body needs bytes,
-/// and the header is 44 bytes, so this stays here rather than widening that API.
-fn wav_bytes(samples: &[f32], sample_rate: u32) -> Vec<u8> {
-    let pcm = pcm_bytes(samples);
-    let data_len = pcm.len() as u32;
-    let mut out = Vec::with_capacity(44 + pcm.len());
-    out.extend_from_slice(b"RIFF");
-    out.extend_from_slice(&(36 + data_len).to_le_bytes());
-    out.extend_from_slice(b"WAVEfmt ");
-    out.extend_from_slice(&16u32.to_le_bytes());
-    out.extend_from_slice(&1u16.to_le_bytes()); // PCM
-    out.extend_from_slice(&1u16.to_le_bytes()); // mono
-    out.extend_from_slice(&sample_rate.to_le_bytes());
-    out.extend_from_slice(&(sample_rate * 2).to_le_bytes());
-    out.extend_from_slice(&2u16.to_le_bytes());
-    out.extend_from_slice(&16u16.to_le_bytes());
-    out.extend_from_slice(b"data");
-    out.extend_from_slice(&data_len.to_le_bytes());
-    out.extend_from_slice(&pcm);
-    out
-}
-
-/// Clamped, not wrapped — the decoder ends in `tanh` so samples should already be in
-/// range, but a wrap would turn a tiny overshoot into a loud click.
-fn pcm_bytes(samples: &[f32]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(samples.len() * 2);
-    for &s in samples {
-        let v = (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
-        out.extend_from_slice(&v.to_le_bytes());
-    }
-    out
 }
 
 // ---------------------------------------------------------------- handlers
@@ -404,7 +373,7 @@ async fn post_tts_stream(
     require_key(&app, &headers)?;
     validate(&app, &req)?;
     let r = render(&app, req).await?;
-    let body = pcm_bytes(&r.samples);
+    let body = tts_core::wav::pcm_s16le(&r.samples);
     Response::builder()
         .header(header::CONTENT_TYPE, "application/octet-stream")
         .header("x-sample-rate", r.sample_rate.to_string())
