@@ -129,6 +129,44 @@ def duration_of(path: Path) -> float:
     return float(out.stdout.strip())
 
 
+# Containers the site serves, and the MIME type each needs. WebM is the site's convention for
+# every other book, and the reason matters: Safari's support for Opus in an Ogg container is
+# unreliable, while Opus in WebM plays. Shipping `.opus` therefore risks a silent no-audio
+# failure on Safari that no amount of correct alignment would fix.
+MIME = {
+    "webm": "audio/webm; codecs=opus",
+    "ogg": "audio/ogg; codecs=opus",
+    "opus": "audio/ogg; codecs=opus",
+    "mp3": "audio/mpeg",
+    "m4a": "audio/mp4",
+}
+
+
+def probe_delivery(path: Path) -> dict:
+    """Codec, container and bitrate of the file being served, read from the file itself.
+
+    Written into the manifest rather than assumed, so the manifest describes what is actually
+    delivered even if the encode settings change.
+    """
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
+         "stream=codec_name,bit_rate:format=format_name,bit_rate", "-of", "json", str(path)],
+        capture_output=True, text=True, check=True,
+    )
+    probed = json.loads(out.stdout)
+    stream = (probed.get("streams") or [{}])[0]
+    fmt = probed.get("format", {})
+    container = path.suffix.lstrip(".").lower()
+    bits = stream.get("bit_rate") or fmt.get("bit_rate")
+    return {
+        "codec": stream.get("codec_name", "unknown"),
+        "container": container,
+        "formatName": fmt.get("format_name", ""),
+        "mimeType": MIME.get(container, "application/octet-stream"),
+        "bitrate": f"{round(int(bits) / 1000)}k" if bits else None,
+    }
+
+
 def detect_silences(path: Path, noise_db: int = 40, min_seconds: float = 0.20
                     ) -> list[tuple[float, float]]:
     """Silence intervals, from ffmpeg's own analysis of the waveform.
@@ -436,6 +474,7 @@ def main() -> int:
     clamped = enforce_monotonic(canon, duration)
     silences = detect_silences(args.audio)
     cues = build_cues(canon, text)
+    delivery = probe_delivery(args.audio)
 
     words = [
         {"text": c.text, "start": round(c.start, 3), "end": round(c.end, 3)} for c in canon
@@ -481,6 +520,10 @@ def main() -> int:
             "asrModel": args.asr_model,
         },
         "delivery": {
+            # Matches the shape the site's other books use (`single-opus-webm-v1`), so the
+            # asset validator and delivery tooling see a familiar manifest.
+            "format": f"single-{delivery['codec']}-{delivery['container']}-v1",
+            **{k: v for k, v in delivery.items() if v is not None},
             "totalDurationSeconds": round(duration, 3),
             # One file per chapter. The player sums `startSeconds` across entries, so
             # splitting later means adding entries here and nothing else.

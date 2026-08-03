@@ -50,6 +50,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import difflib
 import re
 import sys
 from pathlib import Path
@@ -93,10 +94,32 @@ def clean_inline(line: str) -> str:
     line = re.sub(r"`([^`]*)`", r"\1", line)              # inline code
     line = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", line)      # images
     line = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", line)  # links keep their text
+    # Markdown task-list markers. `- [ ] item` keeps its bullet stripped elsewhere, but the
+    # checkbox itself stayed, so the voice read the brackets: 24 of them in one chapter, 34 in
+    # another. They carry no spoken meaning.
+    line = re.sub(r"^\s*\[[ xX]?\]\s*", "", line)
+    line = re.sub(r"(?<=\s)\[[ xX]?\]\s*", "", line)
+    # `<name>` is a fill-in placeholder in the source, not a tag; the word inside is what
+    # should be spoken. Real tags are dropped entirely.
+    line = re.sub(r"</?(?:br|em|strong|span|div|a|img|sup|sub|code|pre|p|ul|ol|li|hr)\b[^>]*/?>",
+                  "", line, flags=re.I)
+    line = re.sub(r"<([A-Za-z][\w -]*)>", r"\1", line)
+    # Bold-italic first: `***x***` defeats both rules below. `\*\*` matches, then `[^*]+`
+    # fails on the third asterisk, and the italic rule's `(?<!\*)` refuses to start there.
+    # So the markers survived into the narration, and the voice read them out — chapter 10
+    # of one book says "asterisk, asterisk, asterisk local design" and then degenerates into
+    # "asterisksisks", because a repeated nonsense token is exactly what makes the LLM loop.
+    line = re.sub(r"\*\*\*([^*]+)\*\*\*", r"\1", line)    # bold italic
     line = re.sub(r"\*\*([^*]+)\*\*", r"\1", line)        # bold
     line = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"\1", line)  # italic
     line = re.sub(r"_([^_]+)_", r"\1", line)
     line = line.replace("~~", "")
+    # Catch-all. Any asterisk still here is unmatched or nested in a way the rules above did
+    # not anticipate, and there is no reading of one that belongs in speech. Removing it
+    # unconditionally is safer than another special case, because the failure mode of a
+    # missed marker is not a small blemish — it is a degenerate loop that destroys the
+    # passage. The `--stats` scan reports anything else that looks like surviving markup.
+    line = line.replace("*", "")
     # An em dash is a pause in print; a comma is the same pause in speech.
     line = re.sub(r"\s*[—–]\s*", ", ", line)
     line = line.replace("…", "...")
@@ -255,6 +278,12 @@ def page_text(md: str) -> str:
         line = re.sub(r"^#+\s*", "", line)
         line = re.sub(r"^\s*>\s?", "", line)
         line = re.sub(r"^\s*(?:[-*+]|\d+\.)\s+", "", line)
+        # Same checkbox and placeholder handling as `clean_inline`, so the two tokenisers
+        # agree; a difference here shows up as unmapped words rather than as a warning.
+        line = re.sub(r"\[[ xX]?\]\s*", "", line)
+        line = re.sub(r"</?(?:br|em|strong|span|div|a|img|sup|sub|code|pre|p|ul|ol|li|hr)\b[^>]*/?>",
+                      "", line, flags=re.I)
+        line = re.sub(r"<([A-Za-z][\w -]*)>", r"\1", line)
         if set(line) <= {"-", "=", "*", "_"} and len(line) >= 3:
             continue
         # clean_inline without the em-dash rewrite: it changes punctuation, not words.
@@ -271,27 +300,21 @@ def page_text(md: str) -> str:
 def align_tokens(spoken: list[str], page: list[str]) -> list[int]:
     """`spoken[i]` -> index into `page`, or -1.
 
-    A two-pointer walk with bounded lookahead. The sequences agree almost everywhere, so
-    this only has to recover from short local differences; a full edit-distance table over
-    ~3000 tokens would be needless. Lookahead is bounded so a genuine mismatch costs a few
-    unmapped words instead of dragging the whole alignment out of step.
+    `SequenceMatcher` rather than a two-pointer walk with bounded lookahead. The walk was
+    adequate while narration and page text differed only locally, but rendering a table as
+    one sentence per row repeats the column headers on every row — dozens of insertions, each
+    beyond a 24-token lookahead. It desynchronised and stayed desynchronised: chapter 9 fell
+    from 100% mapped to 47.8%.
+
+    A matcher handles insertions, deletions and substitutions without any of them shifting
+    what follows, which is the same reason `align-narration.py` uses one. `autojunk` must
+    stay off or the most common words in a long chapter are discarded as noise.
     """
-    out, j = [], 0
-    for token in spoken:
-        if j < len(page) and page[j] == token:
-            out.append(j)
-            j += 1
-            continue
-        hit = -1
-        for ahead in range(1, 25):
-            if j + ahead < len(page) and page[j + ahead] == token:
-                hit = j + ahead
-                break
-        if hit >= 0:
-            out.append(hit)
-            j = hit + 1
-        else:
-            out.append(-1)
+    matcher = difflib.SequenceMatcher(None, spoken, page, autojunk=False)
+    out = [-1] * len(spoken)
+    for si, pi, size in matcher.get_matching_blocks():
+        for k in range(size):
+            out[si + k] = pi + k
     return out
 
 
@@ -318,6 +341,42 @@ def main() -> int:
         keep_code=args.keep_code,
         keep_captions=not args.no_captions,
     )
+
+    # Markup that reaches the voice is not cosmetic. A `***` that survived cleaning made one
+    # chapter read "asterisk, asterisk, asterisk" and then degenerate into a repetition loop,
+    # destroying the passage. Report anything that still looks like markup, always — a silent
+    # converter is how that shipped.
+    residue = {
+        "asterisk": r"\*",
+        "pipe (table)": r"\|",
+        "backtick": r"`",
+        "bracket": r"[\[\]]",
+        "heading hash": r"(?:^|\s)#{1,6}\s",
+        "blockquote": r"(?:^|\n)\s*>",
+        "html tag": r"<[a-zA-Z/][^>]*>",
+        "shortcode": r"\{\{",
+    }
+    for label, pattern in residue.items():
+        hits = re.findall(pattern, out, flags=re.MULTILINE)
+        if hits:
+            sample = re.search(pattern, out, flags=re.MULTILINE)
+            context = out[max(0, sample.start() - 40) : sample.start() + 40].replace("\n", " ")
+            print(
+                f"warning: {args.input.name}: {len(hits)} surviving {label} in narration "
+                f"text — the voice will read it: ...{context}...",
+                file=sys.stderr,
+            )
+
+    # A single over-long sentence is spoken as one segment, and a segment the AR loop cannot
+    # finish is silently cut short (see `tts_core::text::split_long`). The engine now splits
+    # and retries, but flagging it here points at the sentence rather than the symptom.
+    long_sentences = [s for s in re.split(r"(?<=[.!?])\s+", out) if len(s) > 400]
+    if long_sentences:
+        print(
+            f"warning: {args.input.name}: {len(long_sentences)} sentence(s) over 400 chars; "
+            f"longest {max(len(s) for s in long_sentences)}: {long_sentences[0][:70]}...",
+            file=sys.stderr,
+        )
 
     if args.stats:
         words = len(out.split())

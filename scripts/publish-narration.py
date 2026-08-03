@@ -31,8 +31,32 @@ from pathlib import Path
 # because nothing globs these directories numerically — the only globber in the site's
 # scripts matches `chapter-part-\d{3}.mp3` *inside* a directory, not the directories.
 def site_dir(stem: str) -> str:
-    m = re.fullmatch(r"chapter-(\d+)", stem)
+    m = re.match(r"chapter-(\d+)", stem)
     return f"chapter-{int(m.group(1)):03d}" if m else stem
+
+
+def find_sources(content: Path) -> dict[str, Path]:
+    """Map a narration stem to the markdown that produced it.
+
+    Books are laid out two ways in this site. `the-change-interface` is flat —
+    `chapter-1.md` beside `introduction.md`. Every other book nests chapters inside
+    `part-NN-*/` directories and names them `chapter-NNN-slug.md`. Searching recursively and
+    keying on the chapter *number* handles both without the caller having to say which.
+
+    `_index.md` is excluded at every level: those are landing pages for the book and its
+    parts, not narration content.
+    """
+    sources: dict[str, Path] = {}
+    for md in sorted(content.rglob("*.md")):
+        if md.name == "_index.md":
+            continue
+        m = re.match(r"chapter-(\d+)", md.stem)
+        key = f"chapter-{int(m.group(1)):03d}" if m else md.stem
+        # A flat book yields `chapter-1` -> `chapter-001`; both spellings must resolve.
+        sources[key] = md
+        if m:
+            sources[f"chapter-{int(m.group(1))}"] = md
+    return sources
 
 
 def mmss(seconds: float) -> str:
@@ -68,7 +92,9 @@ def main() -> int:
     ap.add_argument("--narration", type=Path, required=True)
     ap.add_argument("--site", type=Path, required=True, help="repo root of the Hugo site")
     ap.add_argument("--slug", required=True, help="book slug under content/books")
-    ap.add_argument("--ext", default="opus")
+    # WebM is what every other book on the site delivers, and Safari's Opus-in-Ogg support is
+    # unreliable enough that the container is a compatibility decision rather than a detail.
+    ap.add_argument("--ext", default="webm")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -80,13 +106,14 @@ def main() -> int:
     manifests = sorted(args.narration.glob("*.manifest.json"))
     if not manifests:
         sys.exit(f"no manifests in {args.narration}")
+    sources = find_sources(content)
 
     print(f"{'chapter':<16} {'-> site dir':<18} {'audio':>9} {'manifest':>9}  front matter")
     published = 0
     for man_path in manifests:
         stem = man_path.name.removesuffix(".manifest.json")
         src_audio = args.narration / f"{stem}.{args.ext}"
-        md = content / f"{stem}.md"
+        md = sources.get(stem, content / f"{stem}.md")
         if not src_audio.exists():
             print(f"{stem:<16} missing {src_audio.name}")
             continue

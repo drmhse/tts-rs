@@ -147,6 +147,17 @@ const DEFAULT_LLM_BATCH: usize = 8;
 /// and 2400 target frames; 2000 sits in the middle of it.
 const FLOW_GROUP_FRAMES: usize = 2000;
 
+/// How many times to redraw a segment that looks cut short. Sampling is stochastic, so a
+/// prompt that stopped early usually completes on another draw.
+const TRUNCATION_RETRIES: usize = 3;
+/// A segment is suspect below this fraction of the request's median speech-tokens-per-text-token.
+/// 0.6 sits well clear of ordinary variation — the ratio's spread across a healthy chapter is a
+/// few percent — while catching the observed failures, which lost a third or more of a segment.
+const TRUNCATION_RATIO_FLOOR: f64 = 0.6;
+/// Below this many text tokens the ratio is too noisy to judge: a three-word segment can
+/// legitimately be spoken very fast or very slowly.
+const TRUNCATION_MIN_TEXT_TOKENS: usize = 12;
+
 impl CosyVoiceEngine {
     pub fn load(config: &EngineConfig) -> Result<Self> {
         let device = if config.cpu {
@@ -317,6 +328,96 @@ impl Engine for CosyVoiceEngine {
                 &mut rng,
                 request.sampling.greedy,
             )?);
+        }
+        // Regenerate any segment whose speech is implausibly short for its text.
+        //
+        // The AR loop can stop early. `MIN_TOKEN_RATIO` only masks `eos` for the first
+        // `2 * text_tokens` steps, and past that the LLM is free to end the sequence
+        // wherever it likes — so a long segment can be spoken as far as its first third and
+        // then simply stop. Nothing downstream can tell: the flow decodes whatever tokens it
+        // is given, the vocoder renders them, durations agree, and the file plays. One book
+        // shipped with 24 segments cut short this way, about two minutes of text that is in
+        // the script and not in the audio.
+        //
+        // The test is each segment's speech tokens per text token against the *median* of
+        // the same ratio over this request. A median is the right reference because it is
+        // measured from this voice and this text rather than assumed from a words-per-minute
+        // constant, and a handful of truncated segments cannot drag it far. Retries are
+        // worth making because sampling is stochastic: the same prompt usually completes on
+        // a second draw.
+        for attempt in 1..=TRUNCATION_RETRIES {
+            let ratios: Vec<f64> = generated
+                .iter()
+                .zip(&prompts)
+                .map(|(speech, p)| speech.len() as f64 / p.2.max(1) as f64)
+                .collect();
+            let mut sorted = ratios.clone();
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let median = sorted[sorted.len() / 2];
+            if median <= 0.0 {
+                break;
+            }
+            let short: Vec<usize> = ratios
+                .iter()
+                .enumerate()
+                .filter(|(i, r)| {
+                    // Short segments have a naturally noisy ratio, so only judge ones long
+                    // enough for the comparison to mean something.
+                    prompts[*i].2 >= TRUNCATION_MIN_TEXT_TOKENS
+                        && **r < median * TRUNCATION_RATIO_FLOOR
+                })
+                .map(|(i, _)| i)
+                .collect();
+            if short.is_empty() {
+                break;
+            }
+            eprintln!(
+                "engine {ID}: {} segment(s) look truncated (median {:.2} speech tokens per \
+                 text token); regenerating, attempt {attempt} of {TRUNCATION_RETRIES}",
+                short.len(),
+                median
+            );
+            for &i in &short {
+                let one = std::slice::from_ref(&prompts[i]);
+                let redone = self.llm.generate_batch_with(
+                    one,
+                    &mut rng,
+                    request.sampling.greedy,
+                )?;
+                if let Some(speech) = redone.into_iter().next() {
+                    if speech.len() > generated[i].len() {
+                        generated[i] = speech;
+                    }
+                }
+            }
+            if attempt == TRUNCATION_RETRIES {
+                // Report rather than ship silence in place of text. The caller can lower
+                // `max_chars`, which is the fix that actually removes the cause.
+                let still: Vec<String> = short
+                    .iter()
+                    .filter(|&&i| {
+                        (generated[i].len() as f64 / prompts[i].2.max(1) as f64)
+                            < median * TRUNCATION_RATIO_FLOOR
+                    })
+                    .map(|&i| {
+                        let text = flat[i].1;
+                        format!(
+                            "segment {i} ({} chars, {} speech tokens): {:.60}...",
+                            text.len(),
+                            generated[i].len(),
+                            text
+                        )
+                    })
+                    .collect();
+                anyhow::ensure!(
+                    still.is_empty(),
+                    "engine {ID} could not generate complete speech for {} segment(s) after \
+                     {TRUNCATION_RETRIES} attempts; the text would be spoken incompletely. \
+                     Lower max_chars so no segment is this long.\n  {}",
+                    still.len(),
+                    still.join("\n  ")
+                );
+            }
         }
         self.device.synchronize()?;
         stats.add("llm", t.elapsed().as_secs_f64());
