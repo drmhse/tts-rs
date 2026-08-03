@@ -28,6 +28,24 @@ cargo run -p tts-cli --release -- voice voices/cosy-default    # inspect an asse
 ./scripts/gates.sh                                             # everything verifiable
 ```
 
+## Serving over HTTP
+
+`tts-serve` replaces the Python FastAPI service on its own port and speaks the same
+protocol — same routes, same request bodies, same response headers, same auth — so a
+client switches by pointing at a different process.
+
+```sh
+TTS_API_KEY=… cargo run -p tts-serve --release -- --port 3003
+curl -X POST localhost:3003/tts -H "X-API-Key: $TTS_API_KEY" \
+     -H 'content-type: application/json' -d '{"text":"Hello."}' -o out.wav
+```
+
+Verified side by side against the Python service on the same request: identical WAV format,
+identical headers, identical auth. **RTF 0.70 against 0.80** over HTTP on a 132-word
+passage, and **3–4 s to load against 15–17 s**. The durable job queue and forced alignment
+are not implemented and answer `501` rather than pretending. Details, and what it refuses
+to do, in **[docs/serving.md](docs/serving.md)**.
+
 ## Using it as a library
 
 ```rust
@@ -76,6 +94,7 @@ no supervisor and no growth budget.
 | | |
 |---|---|
 | [docs/setup.md](docs/setup.md) | from a fresh clone to working audio, in three levels |
+| [docs/serving.md](docs/serving.md) | running it as an HTTP service, and how it compares to the Python one |
 | [docs/status.md](docs/status.md) | **the map** — what exists, how it validates, how fast, what is left |
 | [docs/architecture.md](docs/architecture.md) | the engine trait, voice assets, why the crates split as they do |
 | [docs/benchmarking.md](docs/benchmarking.md) | how to measure on this hardware without fooling yourself |
@@ -103,6 +122,7 @@ crates/tts-core/        the Engine trait, voice assets, segmentation, WAV, the P
 crates/tts-nn/          shared model machinery + the custom Metal kernels
 crates/tts-engines/     the registry — the one place that knows which engines exist
 crates/tts-cli/         the `tts` binary: engines / voice / speak
+crates/tts-serve/       the HTTP service, wire-compatible with the Python one
 crates/tts-bench/       the thermally-honest measurement harness
 crates/tts-probe/       op-level benchmarks, one binary per question (see its README)
 crates/audio8/          the Audio8 engine + its fixture gate

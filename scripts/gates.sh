@@ -70,6 +70,34 @@ for spec in "audio8:voices/cosy-default" "cosyvoice:voices/cosy-default-cosyvoic
   fi
 done
 
+say "HTTP service smoke test"
+if [ -d voices/cosy-default-cosyvoice ] && [ -d references/cosyvoice/weights ]; then
+  TTS_API_KEY=gate-smoke-key ./target/release/tts-serve --port 3099 >target/gate/serve.log 2>&1 &
+  serve_pid=$!
+  for _ in $(seq 1 60); do
+    curl -sf -o /dev/null http://127.0.0.1:3099/health && break
+    sleep 1
+  done
+  if curl -sf -o /dev/null http://127.0.0.1:3099/health; then
+    code=$(curl -s -o target/gate/http.wav -w '%{http_code}' -X POST http://127.0.0.1:3099/tts \
+      -H 'content-type: application/json' -H 'X-API-Key: gate-smoke-key' \
+      -d '{"text":"Gate smoke test."}')
+    unauth=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3099/tts \
+      -H 'content-type: application/json' -d '{"text":"no key"}')
+    if [ "$code" = 200 ] && [ "$unauth" = 401 ] && [ -s target/gate/http.wav ]; then
+      echo "POST /tts 200, unauthenticated 401, wav non-empty"
+    else
+      echo "http smoke FAILED (tts=$code unauth=$unauth)"; fail=1
+    fi
+  else
+    echo "http smoke FAILED: /health never came up"; fail=1
+  fi
+  kill "$serve_pid" 2>/dev/null
+  wait "$serve_pid" 2>/dev/null
+else
+  skip "http smoke: cosyvoice weights or voice asset missing"
+fi
+
 say "Summary"
 [ "$SKIPPED" -gt 0 ] && echo "$SKIPPED tier(s) skipped for missing inputs — see docs/setup.md"
 if [ "$fail" -eq 0 ]; then

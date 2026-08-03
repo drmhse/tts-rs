@@ -45,6 +45,11 @@ pub struct VoiceManifest {
     pub seconds: Option<f64>,
 }
 
+/// `Clone` is cheap and intentional: candle tensors are `Arc`-backed, so a clone bumps
+/// refcounts rather than copying the asset. A long-lived server hands the same voice to
+/// every request, and that should not mean re-reading it from disk or wrapping it in a
+/// second layer of `Arc` at each call site.
+#[derive(Clone)]
 pub struct Voice {
     pub engine: String,
     pub name: String,

@@ -6,6 +6,7 @@ members = [
     "crates/tts-bench",
     "crates/tts-engines",
     "crates/tts-cli",
+    "crates/tts-serve",
     "crates/audio8",
     "crates/cosyvoice",
     "crates/tts-probe",
