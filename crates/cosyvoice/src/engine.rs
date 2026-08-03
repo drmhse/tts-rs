@@ -139,6 +139,14 @@ pub struct CosyVoiceEngine {
 /// Segments decoded together in the LLM by default. See `llm_max_batch`.
 const DEFAULT_LLM_BATCH: usize = 8;
 
+/// Target mel frames of *generated* speech per flow call, excluding the voice prompt.
+///
+/// The flow cost per call is `a*n + b*n^2` with the prompt included in `n`, so there is a
+/// genuine optimum: too small and every call re-pays the 588-frame prompt, too large and
+/// quadratic attention takes over. Measured coefficients put the flat minimum between 1600
+/// and 2400 target frames; 2000 sits in the middle of it.
+const FLOW_GROUP_FRAMES: usize = 2000;
+
 impl CosyVoiceEngine {
     pub fn load(config: &EngineConfig) -> Result<Self> {
         let device = if config.cpu {
@@ -338,13 +346,66 @@ impl Engine for CosyVoiceEngine {
         // Two reasons it can fall back to per-segment: the fixed noise asset is 15000 mel
         // frames (~300 s), and a caller may want the old behaviour, which `--set
         // flow_per_segment=1` gives.
-        let total_tokens: usize = spans.iter().map(|(_, t)| t.len()).sum();
-        let total_mel = (cond.tokens.len() + total_tokens) * cfg::TOKEN_MEL_RATIO;
-        let fuse = !self.flow_per_segment && total_mel <= self.flow.max_frames();
+        // How many segments share one flow call. Neither extreme is right, and this used
+        // to be a binary choice between them.
+        //
+        // Every call re-prepends the voice's prompt mel (588 frames here), so decoding one
+        // segment at a time wastes 57% of each call on the prompt. But the DiT's attention
+        // is quadratic in sequence length, so fusing a whole chapter is far worse still.
+        // Fitting the measured per-block cost `a*n + b*n^2` (a = 0.027267 ms/frame,
+        // b = 4.304e-6 ms/frame^2, from `tts-probe --bin flowsplit` across 798 and 3192
+        // frames) over a 17-minute chapter:
+        //
+        // | target frames per call | flow cost |
+        // |---|---|
+        // | 437 (one segment, the old fallback) | 1.00x |
+        // | 1600-2400 | **0.67x** |
+        // | 51700 (fuse everything) | 3.44x |
+        //
+        // So whole-utterance fusion — which this engine used to prefer whenever it fitted —
+        // is a *pessimisation* on long text, and only looked good because the passage it was
+        // measured on was short enough to stay near the optimum. The noise asset's 15000
+        // frame cap had been hiding that by forcing the fallback.
+        let prompt_tokens = cond.tokens.len();
+        let budget_tokens = self
+            .flow
+            .max_frames()
+            .saturating_div(cfg::TOKEN_MEL_RATIO)
+            .saturating_sub(prompt_tokens);
+        let group_tokens = if self.flow_per_segment {
+            1 // `--set flow_per_segment=1` keeps the old one-call-per-segment behaviour.
+        } else {
+            (FLOW_GROUP_FRAMES / cfg::TOKEN_MEL_RATIO)
+                .min(budget_tokens)
+                .max(1)
+        };
+
+        // Greedy: fill a group until the next segment would overflow the budget. A single
+        // segment longer than the budget still gets its own call rather than being split,
+        // because splitting inside a segment would cut prosody mid-sentence.
+        let mut groups: Vec<Vec<usize>> = Vec::new();
+        let mut acc = 0usize;
+        for (i, (_, toks)) in spans.iter().enumerate() {
+            let n = toks.len();
+            if groups.is_empty() || (acc + n > group_tokens && !groups.last().unwrap().is_empty()) {
+                groups.push(Vec::new());
+                acc = 0;
+            }
+            groups.last_mut().expect("group pushed").push(i);
+            acc += n;
+        }
 
         let mut pieces: Vec<(usize, Vec<f32>)> = Vec::new();
-        if fuse {
-            let tokens: Vec<u32> = spans.iter().flat_map(|(_, t)| t.iter().copied()).collect();
+        let per_token = cfg::TOKEN_MEL_RATIO * self.hift.samples_per_frame();
+        for group in &groups {
+            let tokens: Vec<u32> = group
+                .iter()
+                .flat_map(|&i| spans[i].1.iter().copied())
+                .collect();
+            if tokens.is_empty() {
+                continue;
+            }
+
             let t = Instant::now();
             let mel = self
                 .flow
@@ -358,51 +419,33 @@ impl Engine for CosyVoiceEngine {
             stats.add("vocoder", t.elapsed().as_secs_f64());
 
             stats.frames += mel.dim(2)?;
-            stats.segments = spans.len();
+            stats.segments += group.len();
 
-            // Cut the continuous waveform back into segments so the caller's gaps still
-            // apply. The boundaries are exact, not estimated: the flow holds each speech
-            // token for `TOKEN_MEL_RATIO` mel frames and the vocoder emits
+            // Cut the group's waveform back into its segments so the caller's gaps still
+            // apply. The boundaries are exact rather than estimated: the flow holds each
+            // speech token for `TOKEN_MEL_RATIO` mel frames and the vocoder emits
             // `samples_per_frame` samples per frame, so a segment of `n` tokens is exactly
             // `n * ratio * spf` samples.
             //
-            // This is not cosmetic. Fusing without it measured **WER 0.023 against 0.000**
-            // for the per-segment path — three errors in 133 words, from sentence boundaries
-            // running together with no pause. The speed comes from decoding once; the pauses
-            // come from cutting afterwards, and there is no reason to trade one for the other.
+            // This is not cosmetic. Decoding several segments in one call *without* cutting
+            // measured **WER 0.023 against 0.000** — sentence boundaries running together
+            // with no pause. The speed comes from decoding together; the pauses come from
+            // cutting afterwards, and there is no reason to trade one for the other.
             let samples = wav_t.flatten_all()?.to_vec1::<f32>()?;
-            let per_token = cfg::TOKEN_MEL_RATIO * self.hift.samples_per_frame();
             let mut at = 0usize;
-            for (i, (pi, toks)) in spans.iter().enumerate() {
-                let want = toks.len() * per_token;
-                // The last segment takes whatever remains, so rounding cannot drop samples.
-                let end = if i + 1 == spans.len() {
+            for (j, &i) in group.iter().enumerate() {
+                let want = spans[i].1.len() * per_token;
+                // The last segment of a group takes whatever remains, so rounding cannot
+                // drop samples.
+                let end = if j + 1 == group.len() {
                     samples.len()
                 } else {
                     (at + want).min(samples.len())
                 };
                 if end > at {
-                    pieces.push((*pi, samples[at..end].to_vec()));
+                    pieces.push((spans[i].0, samples[at..end].to_vec()));
                 }
                 at = end;
-            }
-        } else {
-            for (pi, speech) in &spans {
-                let t = Instant::now();
-                let mel = self
-                    .flow
-                    .synthesize(&cond.tokens, speech, &cond.mel, &speaker)?;
-                self.device.synchronize()?;
-                stats.add("flow", t.elapsed().as_secs_f64());
-
-                let t = Instant::now();
-                let wav_t = self.hift.forward(&mel, Noise::Draw(&mut rng))?;
-                self.device.synchronize()?;
-                stats.add("vocoder", t.elapsed().as_secs_f64());
-
-                stats.frames += mel.dim(2)?;
-                stats.segments += 1;
-                pieces.push((*pi, wav_t.flatten_all()?.to_vec1::<f32>()?));
             }
         }
         stats.total_s = t0.elapsed().as_secs_f64();

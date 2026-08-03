@@ -52,6 +52,7 @@ Some need converted weights or dumped fixtures; see [docs/setup.md](../../docs/s
 | `hiftsplit` | where the vocoder spends its time |
 | `upsconv` | does the GEMM route survive a 1.1 GB im2col matrix? (**yes**) |
 | `coldpath` | is the vocoder's first call expensive? (**no — it was a timer bug**) |
+| `overlap` | do two GPU stages overlap if run on separate threads? (**no — 1.00x**) |
 
 ## The ones that said no
 
