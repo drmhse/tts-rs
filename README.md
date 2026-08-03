@@ -103,7 +103,7 @@ See [docs/performance/memory.md](docs/performance/memory.md).
 | | |
 |---|---|
 | [docs/setup.md](docs/setup.md) | from a fresh clone to working audio, in three levels |
-| [docs/serving.md](docs/serving.md) | running it as an HTTP service, and how it compares to the Python one |
+| [docs/serving.md](docs/serving.md) | running it as an HTTP service, and the markdown-to-audiobook pipeline |
 | [docs/status.md](docs/status.md) | **the map** — what exists, how it validates, how fast, what is left |
 | [docs/architecture.md](docs/architecture.md) | the engine trait, voice assets, why the crates split as they do |
 | [docs/benchmarking.md](docs/benchmarking.md) | how to measure on this hardware without fooling yourself |

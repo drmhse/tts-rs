@@ -27,8 +27,24 @@ choices a narrator would:
     stating what the figure was for. Keeping it is the better audiobook default; pass
     `--no-captions` to omit.
 
+# Page-word mapping
+#
+# The site's player highlights words in the *rendered page*, and it discovers those words by
+# walking the DOM (`collectPageWords` in `audio-player.js`). So a manifest entry's
+# `pageWordIndex` has to index into rendered-prose word order, not into the narration text.
+#
+# The two sequences are nearly identical — the transformations above change punctuation and
+# structure, not words — so `--emit-map` writes the page words in rendered order alongside a
+# `spokenToPageWord` array produced by aligning the two token streams. Where they diverge
+# (a figure's `alt` text is never rendered; a heading gains a full stop) the alignment
+# absorbs it rather than drifting.
+#
+# Emitting explicit indices matters: the player prefers them and only falls back to
+# `legacyGreedyPageWordMatches`, a fuzzy DOM match, when they are absent.
+
 Usage:
     scripts/md-to-narration.py chapter-1.md -o chapter-1.txt
+    scripts/md-to-narration.py chapter-1.md --emit-map chapter-1.map.json
     scripts/md-to-narration.py chapter-1.md --stats
 """
 from __future__ import annotations
@@ -145,6 +161,73 @@ def convert(text: str, keep_code: bool = False, keep_captions: bool = True) -> s
     return "\n\n".join(p for p in paragraphs if p.strip()) + "\n"
 
 
+# Matches `wordPattern` in audio-player.js so both sides tokenise identically.
+WORD = re.compile(r"[A-Za-z0-9]+(?:['\u2019][A-Za-z0-9]+)?")
+
+
+def normalize_word(w: str) -> str:
+    return re.sub(r"[^a-z0-9']", "", w.lower().replace("\u2019", "'"))
+
+
+def page_text(md: str) -> str:
+    """The prose a browser would show, in DOM order.
+
+    Same removals as narration except the ones that only affect *speech*: no comma
+    substitution for em dashes, no full stop appended to headings. A figure shortcode
+    contributes only its caption, which is what actually renders as text.
+    """
+    md = strip_front_matter(md)
+    md = drop_html_comments(md)
+    md = resolve_shortcodes(md, keep_captions=True)
+    md = drop_code_blocks(md)
+    out = []
+    for raw in md.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        line = re.sub(r"^#+\s*", "", line)
+        line = re.sub(r"^\s*>\s?", "", line)
+        line = re.sub(r"^\s*(?:[-*+]|\d+\.)\s+", "", line)
+        if set(line) <= {"-", "=", "*", "_"} and len(line) >= 3:
+            continue
+        # clean_inline without the em-dash rewrite: it changes punctuation, not words.
+        line = re.sub(r"`([^`]*)`", r"\1", line)
+        line = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", line)
+        line = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", line)
+        line = re.sub(r"\*\*([^*]+)\*\*", r"\1", line)
+        line = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"\1", line)
+        line = re.sub(r"_([^_]+)_", r"\1", line)
+        out.append(line)
+    return " ".join(out)
+
+
+def align_tokens(spoken: list[str], page: list[str]) -> list[int]:
+    """`spoken[i]` -> index into `page`, or -1.
+
+    A two-pointer walk with bounded lookahead. The sequences agree almost everywhere, so
+    this only has to recover from short local differences; a full edit-distance table over
+    ~3000 tokens would be needless. Lookahead is bounded so a genuine mismatch costs a few
+    unmapped words instead of dragging the whole alignment out of step.
+    """
+    out, j = [], 0
+    for token in spoken:
+        if j < len(page) and page[j] == token:
+            out.append(j)
+            j += 1
+            continue
+        hit = -1
+        for ahead in range(1, 25):
+            if j + ahead < len(page) and page[j + ahead] == token:
+                hit = j + ahead
+                break
+        if hit >= 0:
+            out.append(hit)
+            j = hit + 1
+        else:
+            out.append(-1)
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("input", type=Path)
@@ -154,6 +237,11 @@ def main() -> int:
         "--no-captions",
         action="store_true",
         help="omit figure captions instead of narrating them",
+    )
+    ap.add_argument(
+        "--emit-map",
+        type=Path,
+        help="write {pageWords, spokenToPageWord} JSON for the site's highlighting",
     )
     ap.add_argument("--stats", action="store_true", help="report length and est. duration")
     args = ap.parse_args()
@@ -172,6 +260,47 @@ def main() -> int:
             f"{out.count(chr(10) * 2) + 1} paragraphs, ~{words / 155:.1f} min of audio",
             file=sys.stderr,
         )
+
+    if args.emit_map:
+        import json
+
+        source = args.input.read_text()
+        page_tokens = WORD.findall(page_text(source))
+        spoken_tokens = WORD.findall(out)
+        page_norm = [normalize_word(w) for w in page_tokens]
+        spoken_norm = [normalize_word(w) for w in spoken_tokens]
+        mapping = align_tokens(spoken_norm, page_norm)
+        mapped = sum(1 for m in mapping if m >= 0)
+        args.emit_map.write_text(
+            json.dumps(
+                {
+                    "pageWords": [
+                        {"text": t, "normalized": n}
+                        for t, n in zip(page_tokens, page_norm)
+                    ],
+                    "spokenWords": [
+                        {"text": t, "normalized": n}
+                        for t, n in zip(spoken_tokens, spoken_norm)
+                    ],
+                    "spokenToPageWord": mapping,
+                    "pageMapping": {
+                        "algorithm": "two-pointer-lookahead-24",
+                        "spokenWordCount": len(spoken_tokens),
+                        "pageWordCount": len(page_tokens),
+                        "mappedSpokenWordCount": mapped,
+                        "unmappedSpokenWordCount": len(spoken_tokens) - mapped,
+                        "mappedShare": round(mapped / max(1, len(spoken_tokens)), 6),
+                    },
+                },
+                separators=(",", ":"),
+            )
+        )
+        if args.stats:
+            print(
+                f"  page words {len(page_tokens)}, spoken {len(spoken_tokens)}, "
+                f"mapped {100 * mapped / max(1, len(spoken_tokens)):.2f}%",
+                file=sys.stderr,
+            )
 
     if args.out:
         args.out.write_text(out)

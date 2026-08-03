@@ -112,7 +112,7 @@ Real streaming needs the flow decoder to run on chunks with a carried cache; see
 [porting/cosyvoice.md](porting/cosyvoice.md).
 
 
-## Narrating a book
+## Narrating a book (deprecated entry point)
 
 `scripts/narrate.sh` is the batch path: markdown in, Opus out.
 
@@ -149,3 +149,64 @@ reproduces the same audio rather than a different valid draw.
 only on recent versions. If the site needs to serve older Safari, keep an MP3 alongside —
 `ffmpeg -i x.wav -c:a libmp3lame -b:a 128k -ac 1 x.mp3` — rather than dropping Opus, since
 every other browser gets the smaller file.
+
+
+## The book pipeline
+
+One command, markdown to publishable:
+
+```sh
+scripts/narrate-book.sh --book path/to/content/books/<slug> --out narration
+```
+
+It discovers `introduction.md`, `chapter-N.md` (numeric order), `conclusion.md`, skipping
+`_index.md` — a landing page, not narration. Per chapter:
+
+| step | tool | out |
+|---|---|---|
+| markdown -> narration text + page-word map | `md-to-narration.py --emit-map` | `.txt`, `.map.json` |
+| text -> audio | `tts-serve`, one server for the whole book | `.wav` |
+| audio -> delivery format | ffmpeg, Opus 32 kbps | `.opus` |
+| audio + text -> timings | `align-narration.py` | `.manifest.json` |
+
+Resumable (a chapter with a manifest is skipped), deterministic (seed 1234), and one failing
+chapter does not abandon the book. Verify with:
+
+```sh
+$ALIGN_PYTHON scripts/verify-narration.py narration/*.opus
+```
+
+### The manifest matches the site's player
+
+`audio-player.js` reads `delivery.segments[]` (`file`, `durationSeconds`, `startSeconds`,
+`endSeconds`), `transcript.segments[]` (`start`, `end`, `wordStart`, `wordEnd`) and
+`transcript.words[]` (`start`, `end`, `text`, optional `pageWordIndex`). This emits exactly
+that.
+
+Three things learned by reading the player rather than guessing:
+
+- **Segment length is what decides whether the highlight tracks the voice.**
+  `updateCumulativeHighlights` interpolates evenly across a segment's words rather than using
+  their timings, so a long segment drifts however precise those timings are. Splitting on
+  `.!?` alone left a **65.9 s** window — a short lead-in ending in a colon followed by a block
+  quote is one "sentence". Clause punctuation and a word-count fallback cap it at ~12 s;
+  median is now 2.4-3.3 s and the worst 11.6 s.
+- **Overlapping segments break `findIndex(s => t >= s.start && t < s.end)`** — it returns the
+  earlier one and the highlight can jump backwards. wav2vec2 emits the odd adjacent pair
+  overlapping by one 20 ms frame (2 of 392 boundaries on one chapter), so word starts and
+  segment starts are clamped forward.
+- **`normalized` and `pageWordNormalized` are not shipped.** The player computes
+  `normalizeWord(word.normalized || word.text)` and defaults `pageWordNormalized` to `""`,
+  so both were duplicating ~2900 strings per chapter. Dropping them took the book's manifests
+  from 4.8 MB to **2.9 MB**.
+
+`pageWordIndex` is what lets the player highlight the *rendered page* instead of falling back
+to `legacyGreedyPageWordMatches`, a fuzzy DOM match. It comes from aligning the narration
+tokens against the page's tokens, and lands at **98.1-100%** across this book.
+
+### Reusing it on another book
+
+Nothing above is book-specific. `--book DIR` handles the `introduction` / `chapter-N` /
+`conclusion` layout; for anything else pass the files in reading order. `--engine audio8`
+switches voice, `--bitrate` the Opus rate, `ALIGN_PYTHON` the interpreter holding whisperx
+(autodetected when possible, and its absence skips manifests rather than failing the run).
