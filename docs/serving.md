@@ -210,3 +210,31 @@ Nothing above is book-specific. `--book DIR` handles the `introduction` / `chapt
 `conclusion` layout; for anything else pass the files in reading order. `--engine audio8`
 switches voice, `--bitrate` the Opus rate, `ALIGN_PYTHON` the interpreter holding whisperx
 (autodetected when possible, and its absence skips manifests rather than failing the run).
+
+
+## Publishing into the Hugo site
+
+```sh
+scripts/publish-narration.py --narration narration --site ../swe --slug the-change-interface
+```
+
+`--dry-run` first; it prints exactly what it would place and change.
+
+It installs each chapter as the site expects — `static/audio/books/<slug>/<dir>/chapter.opus`
+with `manifest.json` beside it — and writes `audio` and `audio_duration` into the chapter's
+TOML front matter, which is what makes the player render at all
+(`layouts/partials/chapter-audio-player.html` is wrapped in `{{- if $audio -}}`).
+
+Two details that fail silently if missed:
+
+- **`delivery.segments[].file` must be the published filename.** The player resolves it with
+  `new URL(segment.file, manifestURL)`, so leaving the working name (`chapter-1.opus`) in a
+  manifest served as `chapter-001/manifest.json` gives a page that renders, a manifest that
+  loads, and audio that 404s. The publisher rewrites it.
+- **The manifest must sit beside the audio.** The template derives its URL with
+  ``replaceRE `[^/]+$` `manifest.json` $audio``, so the directory layout is not a convention
+  to follow loosely.
+
+`chapter-N` becomes `chapter-NNN` to match the existing books; `introduction` and `conclusion`
+keep their names, which is safe because the only directory globbing in the site's own scripts
+matches `chapter-part-\d{3}.mp3` *inside* a chapter directory.
