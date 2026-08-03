@@ -110,3 +110,42 @@ carries `X-Streaming: buffered` so this is visible rather than implied.
 
 Real streaming needs the flow decoder to run on chunks with a carried cache; see
 [porting/cosyvoice.md](porting/cosyvoice.md).
+
+
+## Narrating a book
+
+`scripts/narrate.sh` is the batch path: markdown in, Opus out.
+
+```sh
+scripts/narrate.sh --engine cosyvoice --out narration path/to/chapter-*.md
+```
+
+It loads the engine **once** and serves every chapter from it, refuses to start when another
+`tts` process holds the GPU, skips chapters whose output already exists (so an interrupted
+book resumes), and keeps going when one chapter fails rather than abandoning the rest.
+
+### Why Opus at 32 kbps
+
+Measured against the lossless WAV on a 17-minute chapter, with faster-whisper WER as the
+quality proxy:
+
+| | size | WER |
+|---|---|---|
+| WAV (source) | 48 MB | 0.018 |
+| MP3 128 kbps | 16 MB | 0.017 |
+| **Opus 32 kbps** | **4.3 MB** | **0.018** |
+| Opus 24 kbps | 3.3 MB | 0.019 |
+
+Opus at 32 kbps is **transparent** — identical WER to the source — at 3.7x smaller than the
+128 kbps MP3 it replaces. 24 kbps starts to cost something measurable, so 32 is the floor
+worth using. Opus resamples to 48 kHz internally; that is how the codec works and is not a
+quality loss.
+
+The WAV is kept beside each Opus file as the lossless master, so re-encoding at a different
+bitrate never needs a re-render. Renders are deterministic (seed 1234), so a re-run
+reproduces the same audio rather than a different valid draw.
+
+**One compatibility note:** Ogg Opus is supported by Chrome, Firefox and Edge, and by Safari
+only on recent versions. If the site needs to serve older Safari, keep an MP3 alongside —
+`ffmpeg -i x.wav -c:a libmp3lame -b:a 128k -ac 1 x.mp3` — rather than dropping Opus, since
+every other browser gets the smaller file.
