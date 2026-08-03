@@ -14,12 +14,13 @@
 # `.json` inventories beside them are small and *are* tracked: they record the tensor
 # names and shapes each gate expects, which is worth having in history even when the
 # tensors themselves are not.
-/fixtures/*/*.safetensors
-
-# Quantization round-trip dumps: ~2.2 GB each, four of them, written by
-# `tts-probe --bin qroundtrip` and consumed only by `references/audio8/quality_ar.py`.
-/fixtures/audio8/ar_*.safetensors
-/fixtures/audio8/quality/
+# Deny everything under a fixture directory, then allow back the small `.json`
+# inventories. Listing extensions instead (`*.safetensors`) leaves the hole that a new
+# file type — a `.npy`, a `.bin`, a stray `.wav` — is committable by default. That is the
+# mechanism by which the book repo ended up with compiled Rust binaries in its history.
+/fixtures/*/*
+!/fixtures/*/
+!/fixtures/*/*.json
 
 # ---------------------------------------------------------------- python
 .venv/
