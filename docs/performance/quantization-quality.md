@@ -5,6 +5,12 @@ measured rather than inferred. Probes: `qroundtrip` (Rust, candle's own quantize
 `references/audio8/quality_ar.py` (torch, greedy generation + distributional metrics),
 faster-whisper `small.en` from the CosyVoice align venv for intelligibility.
 
+> **Note on the WER tooling.** `references/cosyvoice/wer.py` now defaults to
+> faster-whisper (batched, int8), which is ~1.9x quicker on a chapter and uses 3.5x less CPU
+> than openai-whisper. The two agree to about one error in 220 words, so figures here — all
+> produced with openai-whisper — are reproducible with `--backend openai` and comparable but
+> not bit-equal under the default.
+
 ## Verdict
 
 **Use q8_0.** It is 3.35× faster than f32 and transcribes *identically* to the f32

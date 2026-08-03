@@ -157,9 +157,16 @@ trap 2 in [porting/cosyvoice.md](porting/cosyvoice.md).
 The scripts that produce the WER and speaker-similarity numbers in `docs/` need a whisper
 model and torchaudio:
 
+`wer.py` prefers **faster-whisper** and falls back to openai-whisper. On this machine
+faster-whisper lives in CosyVoice's `.venv-align` (python 3.11) and openai-whisper in its
+main `.venv` — so which interpreter you use picks the backend. faster-whisper is ~1.9x
+quicker on a chapter and uses 3.5x less CPU; neither can use the GPU, because CTranslate2
+is CPU-only on macOS and openai-whisper on MPS dies in `aten::empty.memory_format` on the
+`SparseMPS` backend.
+
 ```sh
-# intelligibility — needs openai-whisper, which lives in the CosyVoice venv
-/path/to/CosyVoice/.venv/bin/python references/cosyvoice/wer.py \
+# intelligibility — faster-whisper, the quick path
+/path/to/CosyVoice/.venv-align/bin/python references/cosyvoice/wer.py \
     --text-file examples/senior.txt examples/cosy_senior.wav
 
 # speaker similarity: median F0 and long-term average spectrum
