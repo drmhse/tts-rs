@@ -1,32 +1,70 @@
 #!/usr/bin/env python3
-"""Forced alignment for narrated audio, and the manifest the web player reads.
+"""Word-accurate alignment of narrated audio, and the manifest the web player reads.
 
-This is *forced* alignment, not transcription: the exact script that produced the audio is
-known, so wav2vec2 only has to place known words in time. That is both more accurate than
-recognition and much cheaper — the ASR pass that a normal whisperx flow spends most of its
-time on exists only to supply coarse windows, and a script supplies better ones for free.
+Every timing here is measured from the audio. That is the whole design, and two earlier
+versions of this file got it wrong in ways worth recording, because in both cases the
+failure was invisible to the statistics being reported.
 
-Measured on a 17-minute chapter, CPU:
+# Mistake one: alignment without recognition
 
-| | total | RTF |
-|---|---|---|
-| whisperx with its ASR pass | 132.7 s | 0.128 |
-| **this, windows from the script** | **26 s** | **0.025** |
+The first version did *forced alignment only*. It skipped recognition, cut the script into
+sentence-sized windows, and gave each window a time span in proportion to its character
+count. wav2vec2 then placed words inside those windows.
 
-# Window granularity is not cosmetic
+wav2vec2 can only place words *within the span it is handed*, and has no mechanism to
+reject a bad span. The spans were bad: proportional-by-character assumes a constant speaking
+rate, which narration violates at every heading, paragraph break and inserted gap. Boundary
+error was inherited by every word in the window and accumulated down the chapter.
+
+The reported statistics could not see it. `alignedShare 99.4%` and `coverageEndSeconds
+1033.6/1033.7` say only that words *received* timestamps spanning the file. A word eight
+seconds from its true position scores exactly as well as a correct one. Coverage was
+measured and reported as though it were accuracy.
+
+# Mistake two: adding an acoustic pass on top
+
+The rewrite kept wav2vec2 but cut its windows at recognised anchors, on the reasoning that
+acoustic onsets must beat recognition timestamps. Measured on chapter 1 it was far worse —
+and this time the validation caught it before anything shipped:
+
+| | words placed | drift p90 vs recognition | worst |
+|---|---|---|---|
+| recognition timestamps alone | 2488/2524 | — | — |
+| plus wav2vec2 in anchored windows | 1764/2524 | 4.03 s | 10.9 s |
+
+Subdividing the failing windows made it worse still: 145 windows failing, then 275. The
+stage was discarding timings that were already correct. It is not here, deliberately, and
+the numbers above are the reason not to reintroduce it.
+
+# What this does
+
+1. **Recognise** the audio — `faster-whisper`, batched, `word_timestamps=True`. Measured
+   20.4x realtime, 51 s for a 17-minute chapter. Batching is what makes this affordable:
+   whisperx's unbatched pass is 7.8x on the same machine.
+2. **Globally align** the recognised word sequence to the book's canonical words, so each
+   canonical word takes the time recognition reported for it. The canonical text stays
+   authoritative for spelling, so recognition errors never reach the page.
+3. **Interpolate only what is left**, marking every such word `interpolated` so the manifest
+   never implies a measurement that was not made.
+4. **Cut cues at measured pauses**, and check those cuts against silences ffmpeg detected
+   independently of everything above.
+
+This is the same construction the reference pipeline for the other books used with Gemini
+(`forceAlignWordsToCanonical` in `gemini-transcribe-audio.mjs`). That pipeline's quality came
+from measuring boundaries from the audio and validating them — not from the model — so
+whisper substitutes cleanly, at 20x realtime and with no API dependency.
+
+# Why cue length is the number that matters
 
 `audio-player.js` does not sweep the highlight from word timings. `updateCumulativeHighlights`
-takes the active *segment's* start/end and interpolates evenly across its words:
+interpolates across the active cue:
 
     wordProgress = progress * activeWords.length - index
 
-So segment length decides whether the highlight tracks the voice. Paragraph-sized windows
-(~50 s) produce perfectly good word timings and a highlight that drifts seconds mid-segment.
-Sentences give ~3 s segments, which is what the shipped manifests use (~307 for 1669 s) and
-what this emits.
-
-Word timings are still written out — the player uses them to anchor auto-scroll, and they
-are what a future version should sweep the highlight from instead of interpolating.
+So cue length bounds the visible error however good the word timings are, and a cue must not
+span a pause — the words after the pause would highlight during silence, which is what reads
+as "the highlight is ahead of the voice". Cues target ~3 s and are cut at pauses that were
+measured.
 
 Usage:
     align-narration.py --audio chapter-1.opus --text chapter-1.txt \\
@@ -35,84 +73,339 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import re
 import subprocess
 import sys
 import time
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
 
 warnings.filterwarnings("ignore")
 
 WORD = re.compile(r"[A-Za-z0-9]+(?:['’][A-Za-z0-9]+)?")
 
+# Player cue length. The highlight is interpolated inside a cue, so this — not word timing
+# precision — sets the worst visible error.
+TARGET_CUE_SECONDS = 3.0
+MAX_CUE_SECONDS = 5.0
+MIN_CUE_SECONDS = 1.2
 
-def normalize_word(w: str) -> str:
-    return re.sub(r"[^a-z0-9']", "", w.lower().replace("’", "'"))
+# A gap long enough to call a pause and cut a cue at. Below this, the space between words is
+# phrase rhythm rather than a place the voice actually stops.
+PAUSE_SECONDS = 0.22
+
+# Quality gates. Failing any of these sets `quality.valid = false` naming the reason, rather
+# than shipping a manifest that looks fine and drifts.
+MIN_MEASURED_SHARE = 0.95         # canonical words carrying a recognised time
+
+# A matching run this short is not evidence. `SequenceMatcher` happily reports a size-1 match
+# on a word like `and`, pairing an occurrence in the script with an unrelated occurrence in the
+# recognised stream. On chapter 8 two such matches on `and` pinned 62 canonical words into
+# 1.1 s of audio: the anchors were 794.32 s and 795.44 s, and everything between them was
+# compressed into the gap. Anchors must be supported by their neighbours.
+MIN_ANCHOR_BLOCK = 3
+
+# Narration runs about 2.5-3 words/second. A pair of anchors implying much more than this has
+# at least one false member, whatever its block length, so the weaker one is dropped and the
+# region becomes an honest hole instead of a compressed lie.
+MAX_WORDS_PER_SECOND = 5.0
+MAX_INTERPOLATED_RUN = 15         # consecutive unmeasured words before it is a real hole
+MIN_CUE_PAUSE_AGREEMENT = 0.50    # cue cuts landing at a detected silence
+
+
+def normalize(word: str) -> str:
+    return re.sub(r"[^a-z0-9']", "", word.lower().replace("’", "'"))
 
 
 def duration_of(path: Path) -> float:
     out = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-of", "csv=p=0", str(path)],
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+         str(path)],
         capture_output=True, text=True, check=True,
     )
     return float(out.stdout.strip())
 
 
-# The player interpolates the highlight across a segment's words, so a long segment drifts
-# however good the word timings inside it are. The shipped manifests cap cues at 45 s; this
-# aims far lower, since median ~3 s is what makes the sweep invisible.
-MAX_WINDOW_SECONDS = 12.0
+def detect_silences(path: Path, noise_db: int = 40, min_seconds: float = 0.20
+                    ) -> list[tuple[float, float]]:
+    """Silence intervals, from ffmpeg's own analysis of the waveform.
 
-
-def _split_long(chunk: str, seconds_per_char: float) -> list[str]:
-    """Break a chunk that would exceed `MAX_WINDOW_SECONDS` into speakable pieces.
-
-    Splitting on `.!?` alone left a 65.9 s window in one chapter: a short lead-in ending in a
-    colon followed by a long block quote is a single "sentence" by that rule. Prefer clause
-    punctuation, then fall back to a word count so no window can be unbounded.
+    Deliberately independent of recognition: this is the evidence used to check where cues
+    were cut, so it must not share a failure mode with the thing it checks.
     """
-    if len(chunk) * seconds_per_char <= MAX_WINDOW_SECONDS:
-        return [chunk]
-    parts = [p for p in re.split(r"(?<=[,;:])\s+", chunk) if p.strip()]
-    if len(parts) > 1:
-        out: list[str] = []
-        for p in parts:
-            out.extend(_split_long(p, seconds_per_char))
-        return out
-    # No punctuation to use: cut on words, at roughly the target length.
-    words = chunk.split()
-    budget = max(4, int(MAX_WINDOW_SECONDS / max(seconds_per_char * 6.0, 1e-6)))
-    return [" ".join(words[i : i + budget]) for i in range(0, len(words), budget)] or [chunk]
+    out = subprocess.run(
+        ["ffmpeg", "-v", "info", "-i", str(path), "-af",
+         f"silencedetect=noise=-{noise_db}dB:d={min_seconds}", "-f", "null", "-"],
+        capture_output=True, text=True,
+    )
+    spans: list[tuple[float, float]] = []
+    start: float | None = None
+    for kind, value in re.findall(r"silence_(start|end):\s*(-?[0-9.]+)", out.stderr):
+        seconds = float(value)
+        if kind == "start":
+            start = seconds
+        elif start is not None:
+            spans.append((start, seconds))
+            start = None
+    return spans
 
 
-def sentence_windows(text: str, duration: float) -> list[dict]:
-    """Sentence-sized windows, timed in proportion to characters.
+@dataclass
+class Recognised:
+    """A word the recogniser heard, and when it heard it."""
+    normalized: str
+    start: float
+    end: float
 
-    wav2vec2 refines the boundaries, so these only have to contain the right words. Character
-    count is a good proxy because the speaking rate is near-constant. The final window is
-    forced to the audio end so nothing falls outside every window — an even split once left
-    23 s of a chapter unaligned.
+
+def recognise(audio: Path, model_name: str, batch_size: int
+              ) -> tuple[list[Recognised], float]:
+    """Transcribe with batched faster-whisper. Returns words and elapsed seconds."""
+    from faster_whisper import BatchedInferencePipeline, WhisperModel
+
+    pipeline = BatchedInferencePipeline(
+        model=WhisperModel(model_name, device="cpu", compute_type="int8")
+    )
+    t0 = time.time()
+    segments, _ = pipeline.transcribe(
+        str(audio), language="en", beam_size=1, batch_size=batch_size, word_timestamps=True
+    )
+    words: list[Recognised] = []
+    for segment in segments:
+        for word in segment.words or []:
+            n = normalize(word.word)
+            if n:
+                words.append(Recognised(n, float(word.start), float(word.end)))
+    return words, time.time() - t0
+
+
+@dataclass
+class Canonical:
+    """A word of the book. The book is authoritative for spelling, the audio for timing."""
+    text: str
+    normalized: str
+    char_start: int
+    char_end: int
+    start: float | None = None
+    end: float | None = None
+    # False when no recognised time was available and the value was interpolated.
+    measured: bool = False
+    # Length of the matching run that produced this word's time. Longer runs are stronger
+    # evidence, and this is what decides which anchor to discard when two disagree.
+    support: int = 0
+
+
+def canonical_words(text: str) -> list[Canonical]:
+    return [
+        Canonical(m.group(0), normalize(m.group(0)), m.start(), m.end())
+        for m in WORD.finditer(text)
+        if normalize(m.group(0))
+    ]
+
+
+def attach_times(canon: list[Canonical], heard: list[Recognised]) -> int:
+    """Match the two word sequences and copy recognised times onto canonical words.
+
+    `SequenceMatcher` handles the three things recognition does to a script — substitution,
+    dropping, insertion — without any of them shifting the words that follow. That is what
+    the positional scan in the first version could not do: it desynchronised on the first
+    disagreement and mapped 179 of 2511 words.
+
+    `autojunk` must stay off. It classifies tokens appearing in more than 1% of a long
+    sequence as junk, which in a 2500-word chapter silently discards `the`, `to`, `of` and
+    `a` — several hundred of the most reliable anchors in the text.
+
+    Only runs of at least `MIN_ANCHOR_BLOCK` words are trusted; see that constant for the
+    failure a shorter run caused.
     """
-    sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
-    total_chars = sum(len(s) for s in sents) or 1
-    per_char = duration / total_chars
+    matcher = difflib.SequenceMatcher(
+        None, [c.normalized for c in canon], [h.normalized for h in heard], autojunk=False
+    )
+    measured = 0
+    for ci, hi, size in matcher.get_matching_blocks():
+        if size < MIN_ANCHOR_BLOCK:
+            continue
+        for k in range(size):
+            word = canon[ci + k]
+            word.start, word.end = heard[hi + k].start, heard[hi + k].end
+            word.measured = True
+            word.support = size
+            measured += 1
+    return measured
 
-    chunks: list[str] = []
-    for s in sents:
-        chunks.extend(_split_long(s, per_char))
 
-    total = sum(len(c) for c in chunks) or 1
-    windows, at = [], 0.0
-    for c in chunks:
-        end = min(duration, at + len(c) / total * duration)
-        windows.append({"start": at, "end": end, "text": c})
-        at = end
-    if windows:
-        windows[-1]["end"] = duration
-    return windows
+def drop_implausible_anchors(canon: list[Canonical]) -> int:
+    """Discard anchors that imply an impossible speaking rate.
+
+    A surviving false anchor shows up as two measured words too close together in time to
+    contain the words the script puts between them. Rather than guess which is wrong, drop
+    the one with the weaker matching run and re-check, since removing an anchor can only
+    widen a hole — never create a new violation.
+
+    Without this, chapter 8's babbled passage compressed 62 words into 1.1 s and the manifest
+    reported them as measured.
+    """
+    dropped = 0
+    while True:
+        measured = [i for i, c in enumerate(canon) if c.measured]
+        worst = None
+        for left, right in zip(measured, measured[1:]):
+            between = right - left - 1
+            if between <= 0:
+                continue
+            span = canon[right].start - canon[left].end
+            rate = between / span if span > 1e-6 else float("inf")
+            if rate > MAX_WORDS_PER_SECOND and (worst is None or rate > worst[0]):
+                worst = (rate, left, right)
+        if worst is None:
+            return dropped
+        _, left, right = worst
+        victim = left if canon[left].support <= canon[right].support else right
+        canon[victim].measured = False
+        canon[victim].start = canon[victim].end = None
+        canon[victim].support = 0
+        dropped += 1
+
+
+def fill_holes(canon: list[Canonical]) -> list[int]:
+    """Interpolate words recognition did not place. Returns the size of each hole.
+
+    Every hole is bounded on both sides by a measured word, so error cannot accumulate past
+    the next measured word — the property the first version lacked entirely.
+    """
+    measured = [i for i, c in enumerate(canon) if c.measured]
+    if not measured:
+        raise SystemExit("recognition and script did not overlap at all")
+
+    runs: list[int] = []
+    for i in range(measured[0]):
+        canon[i].start = canon[i].end = canon[measured[0]].start
+    for i in range(measured[-1] + 1, len(canon)):
+        canon[i].start = canon[i].end = canon[measured[-1]].end
+    if measured[0]:
+        runs.append(measured[0])
+    if len(canon) - measured[-1] - 1:
+        runs.append(len(canon) - measured[-1] - 1)
+
+    for left, right in zip(measured, measured[1:]):
+        if right - left <= 1:
+            continue
+        runs.append(right - left - 1)
+        a, b = canon[left].end, canon[right].start
+        step = (b - a) / (right - left)
+        for k in range(left + 1, right):
+            canon[k].start = a + step * (k - left - 1)
+            canon[k].end = a + step * (k - left)
+    return runs
+
+
+def enforce_monotonic(canon: list[Canonical], duration: float) -> int:
+    """`syncTranscript` uses `findIndex(s => t >= s.start && t < s.end)`.
+
+    An overlap therefore selects the *earlier* cue, and the highlight jumps backwards. So
+    overlapping boundaries are not cosmetic — they are a visible defect. Clamp forward.
+    """
+    clamped = 0
+    for i in range(1, len(canon)):
+        if canon[i].start < canon[i - 1].end:
+            canon[i].start = canon[i - 1].end
+            clamped += 1
+        if canon[i].end < canon[i].start:
+            canon[i].end = canon[i].start
+    for c in canon:
+        c.start = max(0.0, min(c.start, duration))
+        c.end = max(c.start, min(c.end, duration))
+    return clamped
+
+
+def build_cues(canon: list[Canonical], text: str) -> list[dict]:
+    """Group words into ~3 s cues, preferring cuts at a measured pause.
+
+    Because word times are measured, the pauses between them are visible and can be cut on.
+    A cue spanning a pause highlights words during silence.
+    """
+    cues: list[dict] = []
+    start = 0
+    for i in range(len(canon)):
+        last = i + 1 == len(canon)
+        span = canon[i].end - canon[start].start
+        gap = 0.0 if last else canon[i + 1].start - canon[i].end
+        after = "" if last else text[canon[i].char_end : canon[i + 1].char_start]
+        sentence = bool(re.search(r"[.!?]", after))
+        clause = bool(re.search(r"[,;:]", after))
+
+        cut = last
+        if not cut and span >= MIN_CUE_SECONDS and (sentence or gap >= PAUSE_SECONDS):
+            cut = True
+        elif not cut and span >= TARGET_CUE_SECONDS and (clause or gap >= PAUSE_SECONDS / 2):
+            cut = True
+        elif not cut and span >= MAX_CUE_SECONDS:
+            cut = True
+
+        if cut:
+            cues.append({
+                "start": round(canon[start].start, 3),
+                "end": round(canon[i].end, 3),
+                "wordStart": start,
+                "wordEnd": i + 1,
+                "text": " ".join(text[canon[start].char_start : canon[i].char_end].split()),
+            })
+            start = i + 1
+    for i in range(1, len(cues)):
+        if cues[i]["start"] < cues[i - 1]["end"]:
+            cues[i]["start"] = cues[i - 1]["end"]
+    return cues
+
+
+def cue_pause_agreement(cues: list[dict], silences: list[tuple[float, float]],
+                        tolerance: float = 0.35) -> float:
+    """Share of cue boundaries landing at a silence ffmpeg found on its own.
+
+    This is the check that does not depend on the timings it judges. A manifest can be
+    perfectly self-consistent and still be shifted against the audio; that shows up here and
+    nowhere else, which is precisely what was missing when the first version shipped.
+    """
+    if len(cues) < 2:
+        return 1.0
+    hits = sum(
+        1 for cue in cues[1:]
+        if any(s - tolerance <= cue["start"] <= e + tolerance for s, e in silences)
+    )
+    return hits / (len(cues) - 1)
+
+
+def map_page_words(words: list[dict], canon: list[Canonical], map_path: Path) -> int:
+    """Attach page-word indices for the DOM highlighting.
+
+    The page tokeniser (`wordPattern` in audio-player.js) and this one can disagree, so the
+    cursor resyncs within a bounded window instead of desynchronising for the rest of the
+    chapter.
+    """
+    pm = json.loads(map_path.read_text())
+    spoken, s2p = pm["spokenWords"], pm["spokenToPageWord"]
+    mapped, cursor = 0, 0
+    for index, c in enumerate(canon):
+        if cursor >= len(spoken) or spoken[cursor]["normalized"] != c.normalized:
+            for ahead in range(1, 25):
+                if (cursor + ahead < len(spoken)
+                        and spoken[cursor + ahead]["normalized"] == c.normalized):
+                    cursor += ahead
+                    break
+        if cursor < len(spoken) and spoken[cursor]["normalized"] == c.normalized:
+            page_index = s2p[cursor]
+            if page_index >= 0:
+                words[index]["pageWordIndex"] = page_index
+                # `explicitPageWordMatches` checks this against the word it finds in the DOM
+                # and drops the match if they disagree. Omitting it to save bytes disables
+                # the player's only defence against a mis-mapped index, which is a bad trade:
+                # a wrong index highlights the wrong word with no way to notice.
+                words[index]["pageWordNormalized"] = c.normalized
+                mapped += 1
+        cursor += 1
+    return mapped
 
 
 def main() -> int:
@@ -122,110 +415,71 @@ def main() -> int:
     ap.add_argument("--map", type=Path, help="page-word map from md-to-narration.py --emit-map")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--title", default="")
-    ap.add_argument("--model", default="small.en")
+    ap.add_argument("--asr-model", default="small.en")
+    ap.add_argument("--batch-size", type=int, default=16)
     args = ap.parse_args()
 
-    import whisperx
-
     text = args.text.read_text()
+    # Measure the file that will actually be served, so encoder delay is included rather than
+    # inherited from a WAV the browser never sees.
     duration = duration_of(args.audio)
-    # Align the file that will actually be served, so any encoder delay is baked in rather
-    # than inherited from a WAV the browser never sees.
-    audio = whisperx.load_audio(str(args.audio))
+    canon = canonical_words(text)
+    if not canon:
+        sys.exit("no words in narration text")
 
-    model, meta = whisperx.load_align_model(language_code="en", device="cpu")
     t0 = time.time()
-    aligned = whisperx.align(
-        sentence_windows(text, duration), model, meta, audio, "cpu",
-        return_char_alignments=False,
-    )
-    elapsed = time.time() - t0
+    heard, asr_seconds = recognise(args.audio, args.asr_model, args.batch_size)
+    measured = attach_times(canon, heard)
+    dropped = drop_implausible_anchors(canon)
+    measured -= dropped
+    holes = fill_holes(canon)
+    clamped = enforce_monotonic(canon, duration)
+    silences = detect_silences(args.audio)
+    cues = build_cues(canon, text)
 
-    words, segments = [], []
-    for seg in aligned["segments"]:
-        timed = [w for w in seg.get("words", []) if "start" in w and "end" in w]
-        if not timed:
-            continue
-        start_index = len(words)
-        for w in timed:
-            # `normalized` is omitted deliberately: the player computes
-            # `normalizeWord(word.normalized || word.text)`, so shipping it duplicates
-            # ~2900 strings per chapter for nothing. Same for `pageWordNormalized`, which
-            # defaults to "" and is only used for build-time verification.
-            words.append({
-                "text": w["word"],
-                "start": round(float(w["start"]), 3),
-                "end": round(float(w["end"]), 3),
-            })
-        segments.append({
-            "start": round(float(timed[0]["start"]), 3),
-            "end": round(float(timed[-1]["end"]), 3),
-            "wordStart": start_index,
-            "wordEnd": len(words),
-            "text": " ".join(w["word"] for w in timed),
-        })
+    words = [
+        {"text": c.text, "start": round(c.start, 3), "end": round(c.end, 3)} for c in canon
+    ]
+    for word, c in zip(words, canon):
+        if not c.measured:
+            word["interpolated"] = True
 
-    # Attach page-word indices.
-    #
-    # The aligner emits words split on whitespace, so `self-evident` is one aligned word
-    # where the page tokeniser (matching `wordPattern` in audio-player.js) sees two. Matching
-    # by normalized string desynchronised on the first such word and then ran off the end —
-    # 179 of 2511 mapped. Instead, consume as many script tokens as the aligned word actually
-    # contains, and resync within a bounded window if they ever disagree.
-    mapped = 0
-    if args.map and args.map.exists():
-        pm = json.loads(args.map.read_text())
-        spoken = pm["spokenWords"]
-        s2p = pm["spokenToPageWord"]
-        page = pm["pageWords"]
-        cursor = 0
-        for word in words:
-            subs = [normalize_word(t) for t in WORD.findall(word["text"])]  # noqa: E501
-            subs = [t for t in subs if t]
-            if not subs:
-                continue
-            if cursor >= len(spoken) or spoken[cursor]["normalized"] != subs[0]:
-                # Bounded resync: a genuine mismatch costs a few unmapped words rather than
-                # dragging the rest of the chapter out of step.
-                for ahead in range(1, 25):
-                    if (
-                        cursor + ahead < len(spoken)
-                        and spoken[cursor + ahead]["normalized"] == subs[0]
-                    ):
-                        cursor += ahead
-                        break
-            if cursor < len(spoken) and spoken[cursor]["normalized"] == subs[0]:
-                page_index = s2p[cursor]
-                if page_index >= 0:
-                    word["pageWordIndex"] = page_index
-                    mapped += 1
-            cursor += len(subs)
+    mapped = map_page_words(words, canon, args.map) if args.map and args.map.exists() else 0
 
-    # Enforce the invariants the player assumes.
-    #
-    # `syncTranscript` picks a segment with `findIndex(s => t >= s.start && t < s.end)`, so
-    # overlapping segments make it select the earlier one and the highlight can jump
-    # backwards. wav2vec2 occasionally emits adjacent words overlapping by one 20 ms frame —
-    # 2 boundaries in 392 on one chapter — which is inaudible but malformed. Clamp forward.
-    clamped = 0
-    for i in range(1, len(words)):
-        if words[i]["start"] < words[i - 1]["end"]:
-            words[i]["start"] = words[i - 1]["end"]
-            clamped += 1
-        if words[i]["end"] < words[i]["start"]:
-            words[i]["end"] = words[i]["start"]
-    for seg in segments:
-        seg["start"] = words[seg["wordStart"]]["start"]
-        seg["end"] = words[seg["wordEnd"] - 1]["end"]
-    for i in range(1, len(segments)):
-        if segments[i]["start"] < segments[i - 1]["end"]:
-            segments[i]["start"] = segments[i - 1]["end"]
+    measured_share = measured / len(canon)
+    agreement = cue_pause_agreement(cues, silences)
+    longest_hole = max(holes, default=0)
+    cue_lengths = sorted(c["end"] - c["start"] for c in cues)
 
-    script_words = len(WORD.findall(text))
+    def pct(values: list[float], q: float) -> float:
+        return round(values[min(len(values) - 1, int(len(values) * q))], 3) if values else 0.0
+
+    issues = []
+    if measured_share < MIN_MEASURED_SHARE:
+        issues.append(
+            f"only {100 * measured_share:.1f}% of words carry a measured time "
+            f"(gate {100 * MIN_MEASURED_SHARE:.0f}%)"
+        )
+    if longest_hole > MAX_INTERPOLATED_RUN:
+        issues.append(
+            f"{longest_hole} consecutive interpolated words (gate {MAX_INTERPOLATED_RUN})"
+        )
+    if agreement < MIN_CUE_PAUSE_AGREEMENT:
+        issues.append(
+            f"only {100 * agreement:.0f}% of cue cuts land at a detected pause "
+            f"(gate {100 * MIN_CUE_PAUSE_AGREEMENT:.0f}%)"
+        )
+    if cue_lengths and cue_lengths[-1] > MAX_CUE_SECONDS * 2:
+        issues.append(f"longest cue {cue_lengths[-1]:.1f}s")
+
     manifest = {
-        "format": "tts-rs-narration-v1",
+        "format": "tts-rs-narration-v2",
         "title": args.title or args.audio.stem,
         "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source": {
+            "timing": "faster-whisper word timestamps mapped onto canonical text",
+            "asrModel": args.asr_model,
+        },
         "delivery": {
             "totalDurationSeconds": round(duration, 3),
             # One file per chapter. The player sums `startSeconds` across entries, so
@@ -239,23 +493,38 @@ def main() -> int:
             }],
         },
         "transcript": {
-            "segments": segments,
+            "segments": cues,
             "words": words,
             "stats": {
-                "scriptWords": script_words,
-                "alignedWords": len(words),
-                "alignedShare": round(len(words) / max(1, script_words), 6),
+                "canonicalWords": len(canon),
+                "recognisedWords": len(heard),
+                "measuredWords": measured,
+                "measuredShare": round(measured_share, 4),
+                "interpolatedWords": len(canon) - measured,
+                "droppedImplausibleAnchors": dropped,
+                "longestInterpolatedRun": longest_hole,
                 "pageMappedWords": mapped,
-                "segments": len(segments),
-                "medianSegmentSeconds": round(
-                    sorted(s["end"] - s["start"] for s in segments)[len(segments) // 2], 3
-                ) if segments else 0,
-                "longestSegmentSeconds": round(
-                    max((s["end"] - s["start"] for s in segments), default=0), 3
-                ),
-                "alignSeconds": round(elapsed, 1),
+                "segments": len(cues),
+                "medianSegmentSeconds": pct(cue_lengths, 0.5),
+                "p90SegmentSeconds": pct(cue_lengths, 0.9),
+                "longestSegmentSeconds": round(cue_lengths[-1], 3) if cue_lengths else 0,
                 "clampedWordStarts": clamped,
                 "coverageEndSeconds": round(words[-1]["end"], 3) if words else 0,
+                # The independent check: cue cuts against ffmpeg's own silence analysis.
+                "detectedSilences": len(silences),
+                "cuePauseAgreement": round(agreement, 4),
+                "asrSeconds": round(asr_seconds, 1),
+                "asrRealtimeFactor": round(duration / max(asr_seconds, 1e-9), 1),
+                "totalSeconds": round(time.time() - t0, 1),
+            },
+        },
+        "quality": {
+            "valid": not issues,
+            "issues": issues,
+            "gates": {
+                "minMeasuredShare": MIN_MEASURED_SHARE,
+                "maxInterpolatedRun": MAX_INTERPOLATED_RUN,
+                "minCuePauseAgreement": MIN_CUE_PAUSE_AGREEMENT,
             },
         },
     }
@@ -263,19 +532,20 @@ def main() -> int:
 
     st = manifest["transcript"]["stats"]
     print(
-        f"{args.audio.name}: {len(segments)} segments (median {st['medianSegmentSeconds']}s, "
-        f"max {st['longestSegmentSeconds']}s), {len(words)}/{script_words} words "
-        f"({100 * st['alignedShare']:.1f}%), page-mapped {mapped}, "
-        f"covers {st['coverageEndSeconds']}s of {duration:.1f}s, in {elapsed:.0f}s",
+        f"{args.audio.name}: {len(cues)} cues (median {st['medianSegmentSeconds']}s, "
+        f"p90 {st['p90SegmentSeconds']}s, max {st['longestSegmentSeconds']}s), "
+        f"{measured}/{len(canon)} measured ({100 * measured_share:.1f}%), "
+        f"longest hole {longest_hole}, page-mapped {mapped}, "
+        f"cue/pause agreement {100 * agreement:.0f}%, "
+        f"asr {st['asrSeconds']}s ({st['asrRealtimeFactor']}x), in {st['totalSeconds']}s",
         file=sys.stderr,
     )
-    # A gap at the end means the highlight stops before the audio does.
+    for issue in issues:
+        print(f"  FAIL: {issue}", file=sys.stderr)
     if words and duration - words[-1]["end"] > 5.0:
-        print(
-            f"  warning: {duration - words[-1]['end']:.1f}s of audio after the last aligned word",
-            file=sys.stderr,
-        )
-    return 0
+        print(f"  warning: {duration - words[-1]['end']:.1f}s of audio after the last word",
+              file=sys.stderr)
+    return 1 if issues else 0
 
 
 if __name__ == "__main__":

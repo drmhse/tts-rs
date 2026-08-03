@@ -1,22 +1,36 @@
 #!/usr/bin/env python3
-"""Did every rendered file actually reach the end of its chapter?
+"""Does each narrated file actually say the chapter — all of it, not just the end?
 
-Matching durations proves the encode did not truncate; it says nothing about whether
-synthesis reached the last sentence. This transcribes the final seconds of each *delivered*
-file — so it also proves the deliverable decodes — and checks the chapter's closing words are
-present.
+Two independent checks, because they catch different failures:
 
-# Why the comparison is normalised
+1. **Completeness.** Transcribe the final seconds of the *delivered* file and look for the
+   chapter's closing words. This proves the encode did not truncate and that synthesis
+   reached the last sentence. It also proves the deliverable decodes.
 
-A first version compared raw strings and flagged two of twelve correct files:
+2. **Integrity.** Find every span the aligner could not measure, transcribe those spans, and
+   compare what was heard against what should have been said. This distinguishes the two
+   reasons a span goes unmeasured, which matter very differently.
 
-  * the script said `chapter 1`, the voice correctly said `chapter one`
-  * the script said `centre`, whisper's `small.en` transcribed `center`
+# Why the integrity check exists
 
-Both were the system doing the right thing and the checker being naive. Numbers are spelled
-out, a small British/American spelling table is applied, and the match is over a bag of the
-closing words rather than an exact substring — so word order jitter at a sentence end does
-not fail an otherwise complete file.
+The first version of this script checked only the last 35 seconds. Chapter 8 shipped with a
+21-second passage of pure babble in the middle of it — the LLM had degenerated into a
+repetition loop on a markdown table that `md-to-narration.py` had flattened into a run-on
+with no sentence boundaries. Two independent recognisers transcribed it as "tampoligation,
+tampolition, sambolition, and tambolion". Nothing in the pipeline noticed: durations matched,
+the file decoded, the closing words were present, and the alignment statistics reported
+coverage rather than correctness.
+
+A tail check cannot find that, and neither can any measure of whether words *received*
+timestamps. What finds it is asking whether the audio in a given span says what the script
+says it should.
+
+# Reading the output
+
+    ok        the span was simply missed by recognition; the audio is fine
+    BABBLE    the audio does not say the words — synthesis failed, re-render is required
+
+`BABBLE` is an audio defect, not an alignment defect, and re-aligning will not fix it.
 
 Usage:
     verify-narration.py narration/*.opus
@@ -25,6 +39,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -34,7 +49,8 @@ from pathlib import Path
 
 warnings.filterwarnings("ignore")
 
-ONES = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split()
+ONES = ("zero one two three four five six seven eight nine ten eleven twelve thirteen "
+        "fourteen fifteen sixteen seventeen eighteen nineteen").split()
 TENS = "  twenty thirty forty fifty sixty seventy eighty ninety".split(" ")
 # Only the spellings that actually differ between the book's prose and `small.en` output.
 BRITISH = {
@@ -47,7 +63,15 @@ BRITISH = {
     "favour": "favor", "favours": "favors", "labour": "labor", "programme": "program",
     "prioritise": "prioritize", "prioritised": "prioritized", "modelling": "modeling",
     "travelled": "traveled", "cancelled": "canceled", "fulfil": "fulfill",
+    "theatre": "theater",
 }
+
+# An unmeasured run this long is worth transcribing. Shorter runs are ordinary recognition
+# misses on one or two words and are not evidence of anything.
+SUSPICIOUS_RUN = 8
+# Below this share of the span's words appearing in the transcript, the audio is not saying
+# the script. Chapter 8's babbled table scored 0.34; its healthy tables scored 0.93-0.97.
+BABBLE_OVERLAP = 0.60
 
 
 def spell_number(n: int) -> str:
@@ -63,10 +87,14 @@ def spell_number(n: int) -> str:
 
 
 def norm(text: str) -> list[str]:
-    """Words only, lowercased, numbers spelled out, spellings harmonised."""
-    words = re.findall(r"[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?", text.lower())
+    """Words only, lowercased, numbers spelled out, spellings harmonised.
+
+    A first version compared raw strings and flagged two of twelve correct files: the script
+    said `chapter 1` where the voice correctly said `chapter one`, and `centre` where
+    `small.en` transcribed `center`. Both were the system working and the checker being naive.
+    """
     out: list[str] = []
-    for w in words:
+    for w in re.findall(r"[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?", text.lower()):
         if w.isdigit():
             out.extend(spell_number(int(w)).split())
         else:
@@ -74,16 +102,66 @@ def norm(text: str) -> list[str]:
     return out
 
 
-def transcribe_tail(model, audio: Path, seconds: int) -> str:
+def transcribe(model, audio: Path, start: float | None = None,
+               seconds: float | None = None, tail: int | None = None) -> str:
+    """Transcribe a clip. Either a tail (`-sseof`) or an absolute span."""
     with tempfile.TemporaryDirectory() as tmp:
-        clip = Path(tmp) / "tail.wav"
+        clip = Path(tmp) / "clip.wav"
+        cut = ["-sseof", f"-{tail}"] if tail is not None else ["-ss", f"{start:.3f}"]
+        span = [] if seconds is None else ["-t", f"{seconds:.3f}"]
         subprocess.run(
-            ["ffmpeg", "-v", "error", "-y", "-sseof", f"-{seconds}", "-i", str(audio),
+            ["ffmpeg", "-v", "error", "-y", *cut, "-i", str(audio), *span,
              "-c:a", "pcm_s16le", "-ar", "16000", "-ac", "1", str(clip)],
             check=True,
         )
-        segs, _ = model.transcribe(str(clip), language="en", beam_size=1, batch_size=8)
-        return "".join(s.text for s in segs)
+        segments, _ = model.transcribe(str(clip), language="en", beam_size=5)
+        return "".join(s.text for s in segments)
+
+
+def unmeasured_runs(manifest: dict, minimum: int) -> list[tuple[int, int]]:
+    """Spans of consecutive words the aligner could not measure, as (start index, length)."""
+    words = manifest["transcript"]["words"]
+    runs: list[tuple[int, int]] = []
+    start, length = 0, 0
+    for i, word in enumerate(words):
+        if word.get("interpolated"):
+            if length == 0:
+                start = i
+            length += 1
+        else:
+            if length >= minimum:
+                runs.append((start, length))
+            length = 0
+    if length >= minimum:
+        runs.append((start, length))
+    return runs
+
+
+def check_integrity(model, audio: Path, manifest: dict, pad: float) -> list[dict]:
+    """Transcribe every suspicious span and report whether the audio says the words."""
+    words = manifest["transcript"]["words"]
+    duration = manifest["delivery"]["totalDurationSeconds"]
+    findings = []
+    for start, length in unmeasured_runs(manifest, SUSPICIOUS_RUN):
+        end = start + length - 1
+        t0 = max(0.0, words[start]["start"] - pad)
+        t1 = min(duration, words[end]["end"] + pad)
+        # A compressed run has almost no time span of its own, so widen to something audible.
+        if t1 - t0 < 4.0:
+            t1 = min(duration, t0 + 12.0)
+        heard = set(norm(transcribe(model, audio, start=t0, seconds=t1 - t0)))
+        want = norm(" ".join(w["text"] for w in words[start : start + length]))
+        overlap = sum(1 for w in want if w in heard) / max(1, len(want))
+        findings.append({
+            "wordIndex": start,
+            "words": length,
+            "start": round(t0, 1),
+            "end": round(t1, 1),
+            "overlap": round(overlap, 2),
+            "babble": overlap < BABBLE_OVERLAP,
+            "text": " ".join(w["text"] for w in words[start : start + length])[:90],
+        })
+    return findings
 
 
 def main() -> int:
@@ -91,41 +169,62 @@ def main() -> int:
     ap.add_argument("files", nargs="+", type=Path)
     ap.add_argument("--tail", type=int, default=35, help="seconds of audio to transcribe")
     ap.add_argument("--words", type=int, default=6, help="closing words that must appear")
+    ap.add_argument("--pad", type=float, default=3.0, help="seconds around a suspicious span")
+    ap.add_argument("--model", default="small.en")
+    ap.add_argument("--skip-integrity", action="store_true")
     args = ap.parse_args()
 
-    from faster_whisper import BatchedInferencePipeline, WhisperModel
+    from faster_whisper import WhisperModel
 
-    model = BatchedInferencePipeline(
-        model=WhisperModel("small.en", device="cpu", compute_type="int8")
-    )
+    model = WhisperModel(args.model, device="cpu", compute_type="int8")
 
-    print(f"{'file':<20} {'ending':<8} {'missing':<28} tail")
+    print(f"{'file':<18}{'ending':<9}{'spans':<7}{'worst':<8}{'missing':<22}tail")
     print("-" * 104)
-    bad = []
-    for audio in args.files:
+    incomplete: list[str] = []
+    babbled: list[tuple[str, dict]] = []
+
+    for audio in sorted(args.files):
         script = audio.with_suffix(".txt")
         if not script.exists():
-            print(f"{audio.name:<20} {'?':<8} no .txt beside the audio")
-            bad.append(audio.name)
+            print(f"{audio.name:<18}{'?':<9}no .txt beside the audio")
+            incomplete.append(audio.name)
             continue
-        heard = norm(transcribe_tail(model, audio, args.tail))
+
+        heard = norm(transcribe(model, audio, tail=args.tail))
         want = norm(script.read_text())[-args.words :]
-        # A bag comparison: order jitter at a sentence end should not fail a complete file.
+        # A bag comparison: word-order jitter at a sentence end should not fail a good file.
         missing = [w for w in want if w not in heard]
-        ok = not missing
-        if not ok:
-            bad.append(audio.name)
+        if missing:
+            incomplete.append(audio.name)
+
+        findings: list[dict] = []
+        man_path = audio.with_name(audio.stem + ".manifest.json")
+        if not args.skip_integrity and man_path.exists():
+            findings = check_integrity(model, audio, json.loads(man_path.read_text()), args.pad)
+            babbled.extend((audio.name, f) for f in findings if f["babble"])
+
+        worst = min((f["overlap"] for f in findings), default=None)
         print(
-            f"{audio.name:<20} {'ok' if ok else 'CHECK':<8} "
-            f"{(','.join(missing) or '-'):<28} ...{' '.join(heard[-8:])}"
+            f"{audio.name:<18}{'ok' if not missing else 'CHECK':<9}"
+            f"{len(findings):<7}{('-' if worst is None else f'{worst:.2f}'):<8}"
+            f"{(','.join(missing) or '-'):<22}...{' '.join(heard[-7:])}"
         )
+        for finding in findings:
+            if finding["babble"]:
+                print(f"    BABBLE {finding['start']}-{finding['end']}s "
+                      f"overlap {finding['overlap']}: {finding['text']}")
 
     print()
-    if bad:
-        print(f"incomplete or unverifiable: {bad}")
-        return 1
-    print(f"all {len(args.files)} files reach their chapter's final words")
-    return 0
+    if incomplete:
+        print(f"incomplete or unverifiable: {incomplete}")
+    if babbled:
+        print("AUDIO DEFECTS — these need re-rendering, not re-aligning:")
+        for name, finding in babbled:
+            print(f"  {name} at {finding['start']}s ({finding['words']} words, "
+                  f"overlap {finding['overlap']})")
+    if not incomplete and not babbled:
+        print(f"all {len(args.files)} files reach their final words and say what they should")
+    return 1 if (incomplete or babbled) else 0
 
 
 if __name__ == "__main__":

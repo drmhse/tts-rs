@@ -110,10 +110,77 @@ def ends_sentence(s: str) -> bool:
     return s.endswith((".", "!", "?", ":", ";", '"'))
 
 
+TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$")
+TABLE_RULE = re.compile(r"^\s*\|[\s|:\-]+\|\s*$")
+
+
+def render_tables(text: str) -> str:
+    """Rewrite markdown tables as speakable sentences.
+
+    Without this, table lines fall through to the paragraph buffer and a table becomes one
+    long run-on with no sentence boundaries — the separator row included. That is not merely
+    ugly to listen to: on chapter 8 it made the LLM degenerate into a repetition loop and
+    emit babble for the whole table, which two independent recognisers transcribed as
+    "tampoligation, tampolition, sambolition, and tambolion". The audio, not the alignment,
+    was wrong, and it shipped.
+
+    Each row becomes its own short sentences, so the engine's sentence segmentation keeps
+    every prompt small:
+
+        | Partner | DevRel provides    | DevRel requires |
+        | Product | field synthesis... | roadmap context... |
+
+        -> "Product. DevRel provides: field synthesis... DevRel requires: roadmap context..."
+
+    A single-column or header-only table degrades to its cells as sentences, which is still
+    speakable.
+    """
+    out: list[str] = []
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        if not TABLE_ROW.match(lines[i]):
+            out.append(lines[i])
+            i += 1
+            continue
+        block = []
+        while i < len(lines) and TABLE_ROW.match(lines[i]):
+            block.append(lines[i])
+            i += 1
+
+        def cells(row: str) -> list[str]:
+            return [c.strip() for c in row.strip().strip("|").split("|")]
+
+        rows = [cells(r) for r in block if not TABLE_RULE.match(r)]
+        if not rows:
+            continue
+        header, body = rows[0], rows[1:]
+        if not body:  # header-only: just speak the cells
+            body, header = [header], []
+        out.append("")
+        for row in body:
+            parts: list[str] = []
+            label = row[0] if row else ""
+            if label:
+                parts.append(label if ends_sentence(label) else label + ".")
+            for index, value in enumerate(row[1:], start=1):
+                if not value:
+                    continue
+                name = header[index] if index < len(header) else ""
+                clause = f"{name}: {value}" if name else value
+                parts.append(clause if ends_sentence(clause) else clause + ".")
+            if parts:
+                out.append(" ".join(parts))
+                out.append("")
+    return "\n".join(out)
+
+
 def convert(text: str, keep_code: bool = False, keep_captions: bool = True) -> str:
     text = strip_front_matter(text)
     text = drop_html_comments(text)
     text = resolve_shortcodes(text, keep_captions=keep_captions)
+    # Before paragraph assembly, so table rows never reach the run-on buffer.
+    text = render_tables(text)
     if not keep_code:
         text = drop_code_blocks(text)
 
