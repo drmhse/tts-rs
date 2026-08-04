@@ -38,7 +38,10 @@ __pycache__/
 
 # Narration output: converted text, rendered audio, and the per-run server logs
 # `scripts/narrate.sh` leaves behind. All regenerable from the source markdown.
+# Narration working directories: WAV masters and delivery files, gigabytes per book.
+# Deliverables live in the site repo; these are reproducible from markdown and a seed.
 /narration/
+/narration-*/
 
 # macOS
 .DS_Store
