@@ -43,6 +43,13 @@ MAX_CHARS="${NARRATE_MAX_CHARS:-80000}"
 BITRATE="${NARRATE_OPUS_BITRATE:-48k}"
 ALIGN_PYTHON="${ALIGN_PYTHON:-}"
 ONLY=""
+# Sampling seed. Renders are deterministic, so re-rendering a chapter that came out wrong
+# reproduces it exactly — a different seed is the only way to get a different draw. Needed
+# because some failures are sampling glitches rather than input problems: one chapter spoke
+# "founder" as "Fongder" and "manual" as "ManuArt", and another stopped at a semicolon and
+# dropped the clause after it. Neither is detectable from token counts; both are obvious to
+# the ASR check in verify-narration.py, and both clear on a different draw.
+SEED="${NARRATE_SEED:-}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -52,6 +59,7 @@ while [ $# -gt 0 ]; do
     --bitrate) BITRATE="$2"; shift 2 ;;
     --align-python) ALIGN_PYTHON="$2"; shift 2 ;;
     --only) ONLY="$2"; shift 2 ;;
+    --seed) SEED="$2"; shift 2 ;;
     -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
     *) FILES+=("$1"); shift ;;
   esac
@@ -157,7 +165,23 @@ for src in "${FILES[@]}"; do
   if [ -s "$man" ]; then say "$base — done already"; skipped=$((skipped+1)); continue; fi
   say "$base  ($(basename "$src"))"
 
-  ./scripts/md-to-narration.py "$src" -o "$txt" --emit-map "$map" --stats 2>&1 | sed 's/^/    /'
+  # Regenerating the text is safe only when there is no audio yet. Deleting a manifest to force
+  # a re-align would otherwise re-derive the text with whatever the converter does *today* and
+  # align yesterday's audio against it — a manifest describing words the voice never said,
+  # which is the exact failure this pipeline exists to prevent. So when a master already exists,
+  # convert to a scratch file and refuse to replace the text that produced it.
+  if [ -s "$wav" ] && [ -s "$txt" ]; then
+    ./scripts/md-to-narration.py "$src" -o "$txt.regen" --emit-map "$map.regen" >/dev/null 2>&1
+    if ! cmp -s "$txt.regen" "$txt"; then
+      warn "$base: markdown now converts differently than when the audio was made; keeping the
+    original text so the manifest still describes the audio. Delete $wav to re-render."
+    else
+      mv -f "$txt.regen" "$txt"; mv -f "$map.regen" "$map"
+    fi
+    rm -f "$txt.regen" "$map.regen"
+  else
+    ./scripts/md-to-narration.py "$src" -o "$txt" --emit-map "$map" --stats 2>&1 | sed 's/^/    /'
+  fi
   chars=$(wc -c < "$txt" | tr -d ' ')
   if [ "$chars" -gt "$MAX_CHARS" ]; then
     warn "$base: $chars chars over --max-chars $MAX_CHARS"; failed=$((failed+1)); continue
@@ -165,7 +189,7 @@ for src in "${FILES[@]}"; do
 
   if [ ! -s "$wav" ]; then
     body="$OUT/.$base.json"
-    python3 -c "import json,sys; json.dump({'text': open(sys.argv[1]).read()}, open(sys.argv[2],'w'))" "$txt" "$body"
+    python3 -c "import json,sys; b={'text': open(sys.argv[1]).read()}; s=sys.argv[3] if len(sys.argv)>3 and sys.argv[3] else None; b.update({'seed': int(s)} if s else {}); json.dump(b, open(sys.argv[2],'w'))" "$txt" "$body" "$SEED"
     code=$(curl -s --max-time 14400 -o "$wav" -D "$OUT/.$base.headers" -w '%{http_code}' \
       -X POST "http://127.0.0.1:$PORT/tts" -H 'content-type: application/json' \
       -H "X-API-Key: $KEY" --data-binary @"$body")

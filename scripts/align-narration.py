@@ -116,8 +116,34 @@ MAX_INTERPOLATED_RUN = 15         # consecutive unmeasured words before it is a 
 MIN_CUE_PAUSE_AGREEMENT = 0.50    # cue cuts landing at a detected silence
 
 
+# Recognition and the book spell the same sound differently, and every such difference used to
+# count as an unmeasured word. Aggregating the manifests showed ~100 words per book lost this
+# way: the book writes "thirty" where whisper writes "30", and "centre" where it writes
+# "center". Neither is a timing problem, but both depressed the measured share and opened
+# false holes, so both sides are folded to one form before matching.
+NUMBER_WORDS = {
+    "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6",
+    "seven": "7", "eight": "8", "nine": "9", "ten": "10", "eleven": "11", "twelve": "12",
+    "thirteen": "13", "fourteen": "14", "fifteen": "15", "sixteen": "16", "seventeen": "17",
+    "eighteen": "18", "nineteen": "19", "twenty": "20", "thirty": "30", "forty": "40",
+    "fifty": "50", "sixty": "60", "seventy": "70", "eighty": "80", "ninety": "90",
+}
+BRITISH = {
+    "centre": "center", "centres": "centers", "colour": "color", "colours": "colors",
+    "behaviour": "behavior", "behaviours": "behaviors", "organisation": "organization",
+    "organisations": "organizations", "organise": "organize", "organised": "organized",
+    "recognise": "recognize", "recognised": "recognized", "realise": "realize",
+    "realised": "realized", "analyse": "analyze", "analysed": "analyzed",
+    "licence": "license", "defence": "defense", "practise": "practice", "favour": "favor",
+    "labour": "labor", "programme": "program", "prioritise": "prioritize",
+    "modelling": "modeling", "travelled": "traveled", "cancelled": "canceled",
+    "fulfil": "fulfill", "theatre": "theater",
+}
+
+
 def normalize(word: str) -> str:
-    return re.sub(r"[^a-z0-9']", "", word.lower().replace("’", "'"))
+    w = re.sub(r"[^a-z0-9']", "", word.lower().replace("\u2019", "'"))
+    return NUMBER_WORDS.get(w) or BRITISH.get(w, w)
 
 
 def duration_of(path: Path) -> float:

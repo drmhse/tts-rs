@@ -99,6 +99,11 @@ def clean_inline(line: str) -> str:
     # another. They carry no spoken meaning.
     line = re.sub(r"^\s*\[[ xX]?\]\s*", "", line)
     line = re.sub(r"(?<=\s)\[[ xX]?\]\s*", "", line)
+    # Bare square brackets are template notation — "It helps [specific customer] move from
+    # [painful current state]". They are visual: a narrator reads the words inside and drops
+    # the brackets, which is also what the page's own tokeniser does, since brackets are not
+    # word characters. Links were already unwrapped above, so nothing here can be a link.
+    line = re.sub(r"\[([^\[\]]*)\]", r"\1", line)
     # `<name>` is a fill-in placeholder in the source, not a tag; the word inside is what
     # should be spoken. Real tags are dropped entirely.
     line = re.sub(r"</?(?:br|em|strong|span|div|a|img|sup|sub|code|pre|p|ul|ol|li|hr)\b[^>]*/?>",
@@ -112,7 +117,19 @@ def clean_inline(line: str) -> str:
     line = re.sub(r"\*\*\*([^*]+)\*\*\*", r"\1", line)    # bold italic
     line = re.sub(r"\*\*([^*]+)\*\*", r"\1", line)        # bold
     line = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"\1", line)  # italic
-    line = re.sub(r"_([^_]+)_", r"\1", line)
+    # Underscore italics, but only when the underscores delimit a word rather than sit inside
+    # one. The unanchored form matched *across* identifiers: given
+    # "`agency_account` -> `client` -> `source_export`", it paired the underscore in
+    # agency_account with the one in source_export, deleted both, and produced "agencyaccount"
+    # and "sourceexport". The voice then read those fused non-words, which is both wrong and
+    # the kind of nonsense token that sends the LLM into a repetition loop.
+    line = re.sub(r"(?<![A-Za-z0-9])_([^\s_][^_]*?)_(?![A-Za-z0-9])", r"\1", line)
+    # snake_case is spoken as separate words: "agency account", not "agencyaccount" and not
+    # "agency underscore account".
+    line = re.sub(r"(?<=[A-Za-z0-9])_(?=[A-Za-z0-9])", " ", line)
+    # Arrows carry the meaning of a chain and were being dropped, leaving a list of nouns with
+    # no relationship between them — "agency account client source export change digest".
+    line = re.sub(r"\s*(?:->|=>|\u2192|\u21d2)\s*", ", then ", line)
     line = line.replace("~~", "")
     # Catch-all. Any asterisk still here is unmatched or nested in a way the rules above did
     # not anticipate, and there is no reading of one that belongs in speech. Removing it
@@ -126,7 +143,35 @@ def clean_inline(line: str) -> str:
     # Smart quotes confuse some tokenizers and add nothing when spoken.
     for a, b in [("“", '"'), ("”", '"'), ("‘", "'"), ("’", "'")]:
         line = line.replace(a, b)
+    line = split_mangled(line)
     return re.sub(r"[ \t]+", " ", line).strip()
+
+
+# Compounds this voice cannot pronounce as one token, with the spacing that fixes them.
+#
+# Found by aggregating the alignment manifests: a word the voice mangles is never recognised,
+# so it shows up as interpolated in every occurrence. Most words that flag that way are
+# innocent — "countermetric", "tradeoff", "codebase" and "quickstart" are all spoken correctly
+# and merely transcribed as two words — so each candidate was listened to before being added
+# here. These two genuinely fail: "timezone" was spoken as "Heideheb" and "signup" as
+# "SignGen".
+MANGLED_COMPOUNDS = {
+    "timezone": "time zone",
+    "timezones": "time zones",
+    "signup": "sign up",
+    "signups": "sign ups",
+}
+
+
+def split_mangled(line: str) -> str:
+    def sub(m):
+        word = m.group(0)
+        fixed = MANGLED_COMPOUNDS[word.lower()]
+        return fixed.capitalize() if word[:1].isupper() else fixed
+    return re.sub(
+        r"\b(?:" + "|".join(sorted(MANGLED_COMPOUNDS, key=len, reverse=True)) + r")\b",
+        sub, line, flags=re.I,
+    )
 
 
 def ends_sentence(s: str) -> bool:
@@ -248,6 +293,13 @@ def convert(text: str, keep_code: bool = False, keep_captions: bool = True) -> s
             buffer.append(cleaned)
 
     flush()
+    # Speech has no case, but the model's pronunciation is sensitive to it: a paragraph
+    # beginning with a lowercase word came out mangled — "founder intervention recorded" was
+    # spoken as "Sharpen intervention recorded", and reproducibly so across two sampling
+    # seeds, which is what ruled out a sampling glitch. Lowercase openings arise naturally
+    # here because snake_case identifiers (`founder_intervention`) become ordinary words and
+    # each list item is its own paragraph.
+    paragraphs = [p[:1].upper() + p[1:] if p[:1].islower() else p for p in paragraphs]
     return "\n\n".join(p for p in paragraphs if p.strip()) + "\n"
 
 
@@ -281,6 +333,7 @@ def page_text(md: str) -> str:
         # Same checkbox and placeholder handling as `clean_inline`, so the two tokenisers
         # agree; a difference here shows up as unmapped words rather than as a warning.
         line = re.sub(r"\[[ xX]?\]\s*", "", line)
+        line = re.sub(r"\[([^\[\]]*)\]", r"\1", line)
         line = re.sub(r"</?(?:br|em|strong|span|div|a|img|sup|sub|code|pre|p|ul|ol|li|hr)\b[^>]*/?>",
                       "", line, flags=re.I)
         line = re.sub(r"<([A-Za-z][\w -]*)>", r"\1", line)
@@ -292,7 +345,9 @@ def page_text(md: str) -> str:
         line = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", line)
         line = re.sub(r"\*\*([^*]+)\*\*", r"\1", line)
         line = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"\1", line)
-        line = re.sub(r"_([^_]+)_", r"\1", line)
+        line = re.sub(r"(?<![A-Za-z0-9])_([^\s_][^_]*?)_(?![A-Za-z0-9])", r"\1", line)
+        line = re.sub(r"(?<=[A-Za-z0-9])_(?=[A-Za-z0-9])", " ", line)
+        line = re.sub(r"\s*(?:->|=>|\u2192|\u21d2)\s*", ", then ", line)
         out.append(line)
     return " ".join(out)
 

@@ -150,13 +150,18 @@ const FLOW_GROUP_FRAMES: usize = 2000;
 /// How many times to redraw a segment that looks cut short. Sampling is stochastic, so a
 /// prompt that stopped early usually completes on another draw.
 const TRUNCATION_RETRIES: usize = 3;
-/// A segment is suspect below this fraction of the request's median speech-tokens-per-text-token.
-/// 0.6 sits well clear of ordinary variation — the ratio's spread across a healthy chapter is a
-/// few percent — while catching the observed failures, which lost a third or more of a segment.
-const TRUNCATION_RATIO_FLOOR: f64 = 0.6;
-/// Below this many text tokens the ratio is too noisy to judge: a three-word segment can
+/// A segment is suspect below this fraction of the request's median speech-tokens-per-character.
+///
+/// This started at 0.6 and let real truncations through. A segment that loses the last third of
+/// its text lands at about 0.7 of the median, inside a 0.6 floor — two chapters of one book
+/// shipped a sentence that stopped mid-clause ("The company has not earned." and then the next
+/// segment) and the guard said nothing. 0.75 catches those. A false positive costs one extra
+/// draw and nothing else, because a regenerated segment is only kept when it is longer, so the
+/// asymmetry argues for the tighter bound.
+const TRUNCATION_RATIO_FLOOR: f64 = 0.75;
+/// Below this many characters the ratio is too noisy to judge: a three-word segment can
 /// legitimately be spoken very fast or very slowly.
-const TRUNCATION_MIN_TEXT_TOKENS: usize = 12;
+const TRUNCATION_MIN_CHARS: usize = 40;
 
 impl CosyVoiceEngine {
     pub fn load(config: &EngineConfig) -> Result<Self> {
@@ -303,6 +308,9 @@ impl Engine for CosyVoiceEngine {
         // Right-alignment makes that exact here; see `llm::Lane`.
         let mut prompts: Vec<(Vec<u32>, Vec<u32>, usize)> = Vec::new();
         let mut para_of: Vec<usize> = Vec::new();
+        // Kept parallel to `prompts`, which is not parallel to `flat`: a segment that
+        // tokenizes to nothing is skipped, so indexing `flat` by a prompt index is wrong.
+        let mut seg_text: Vec<String> = Vec::new();
         for (pi, seg) in &flat {
             let seg_tokens = self.tokenize(seg)?;
             if seg_tokens.is_empty() {
@@ -317,6 +325,7 @@ impl Engine for CosyVoiceEngine {
                 .collect();
             prompts.push((full_text, cond.tokens.clone(), seg_tokens.len()));
             para_of.push(*pi);
+            seg_text.push((*seg).clone());
         }
         anyhow::ensure!(!prompts.is_empty(), "no text to speak");
 
@@ -346,10 +355,13 @@ impl Engine for CosyVoiceEngine {
         // worth making because sampling is stochastic: the same prompt usually completes on
         // a second draw.
         for attempt in 1..=TRUNCATION_RETRIES {
+            // Characters rather than text tokens as the denominator. BPE token counts vary
+            // with digits, casing and punctuation, which widens the ratio's natural spread and
+            // forces a looser threshold; characters track speech duration far more closely.
             let ratios: Vec<f64> = generated
                 .iter()
-                .zip(&prompts)
-                .map(|(speech, p)| speech.len() as f64 / p.2.max(1) as f64)
+                .zip(&seg_text)
+                .map(|(speech, text)| speech.len() as f64 / text.chars().count().max(1) as f64)
                 .collect();
             let mut sorted = ratios.clone();
             sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -363,7 +375,7 @@ impl Engine for CosyVoiceEngine {
                 .filter(|(i, r)| {
                     // Short segments have a naturally noisy ratio, so only judge ones long
                     // enough for the comparison to mean something.
-                    prompts[*i].2 >= TRUNCATION_MIN_TEXT_TOKENS
+                    seg_text[*i].chars().count() >= TRUNCATION_MIN_CHARS
                         && **r < median * TRUNCATION_RATIO_FLOOR
                 })
                 .map(|(i, _)| i)
@@ -396,11 +408,12 @@ impl Engine for CosyVoiceEngine {
                 let still: Vec<String> = short
                     .iter()
                     .filter(|&&i| {
-                        (generated[i].len() as f64 / prompts[i].2.max(1) as f64)
+                        (generated[i].len() as f64
+                            / seg_text[i].chars().count().max(1) as f64)
                             < median * TRUNCATION_RATIO_FLOOR
                     })
                     .map(|&i| {
-                        let text = flat[i].1;
+                        let text = &seg_text[i];
                         format!(
                             "segment {i} ({} chars, {} speech tokens): {:.60}...",
                             text.len(),
