@@ -108,10 +108,24 @@ MIN_MEASURED_SHARE = 0.95         # canonical words carrying a recognised time
 # compressed into the gap. Anchors must be supported by their neighbours.
 MIN_ANCHOR_BLOCK = 3
 
-# Narration runs about 2.5-3 words/second. A pair of anchors implying much more than this has
-# at least one false member, whatever its block length, so the weaker one is dropped and the
-# region becomes an honest hole instead of a compressed lie.
-MAX_WORDS_PER_SECOND = 5.0
+# A pair of anchors implying an impossible speaking rate has at least one false member,
+# whatever its block length, so the weaker one is dropped and the region becomes an honest
+# hole instead of a compressed lie.
+#
+# Calibrate this against peak delivery, not average delivery. Narration averages 2.5-3
+# words/second, and the first version of this gate took 5.0 as generous headroom on that. It
+# is not: measured over runs of ten consecutive recognised words across eleven chapters, this
+# voice sustains 4.7 w/s at the median peak and 5.62 w/s at the maximum, so the gate sat
+# *below* real speech. Dense comma lists are where it bit — a caching chapter's "Name the
+# load, write, event, schedule, generation, source version, or hybrid trigger" is delivered at
+# 5.4 w/s — and there it discarded 26 legitimate anchors, opened a 72-word hole and failed the
+# chapter on a correct recording.
+#
+# The pathology this exists to catch is nowhere near that boundary: the babbled passage that
+# motivated it compressed 62 words into 1.1 s, which is 56 w/s. 12.0 sits more than twice
+# above the fastest real delivery observed and more than four times below the pathology, so it
+# discriminates on the thing it is actually for.
+MAX_WORDS_PER_SECOND = 12.0
 MAX_INTERPOLATED_RUN = 15         # consecutive unmeasured words before it is a real hole
 MIN_CUE_PAUSE_AGREEMENT = 0.50    # cue cuts landing at a detected silence
 
@@ -235,16 +249,37 @@ class Recognised:
 
 def recognise(audio: Path, model_name: str, batch_size: int
               ) -> tuple[list[Recognised], float]:
-    """Transcribe with batched faster-whisper. Returns words and elapsed seconds."""
+    """Transcribe with faster-whisper. Returns words and elapsed seconds.
+
+    `batch_size` of 0 or 1 uses the plain model instead of `BatchedInferencePipeline`. That
+    is not a micro-optimisation, it is a correctness fallback. Batching is what makes this
+    affordable — 20x realtime against 8x — but it occasionally misplaces a segment, and a
+    misplaced segment is indistinguishable from an alignment bug downstream.
+
+    One caching chapter is the worked example. The batched pass reported 1009.65-1014.55 as
+    "Say what happens when the promise cannot be met"; transcribing that window unbatched
+    gives "value causes bypass, degradation, partial results, retry, queuing, fail open, or
+    fail close behavior", and the sentence the batched pass claimed there actually ends before
+    995 s. So the recogniser handed the aligner a false anchor 19 seconds out of place, and
+    every plausibility rule here treats recognition as ground truth.
+
+    Hence the retry in `main`: batched first, and if the result fails a gate, recognise again
+    unbatched and keep whichever alignment is better. Paying 8x for the occasional bad chapter
+    is cheap; paying it for all of them is not.
+    """
     from faster_whisper import BatchedInferencePipeline, WhisperModel
 
-    pipeline = BatchedInferencePipeline(
-        model=WhisperModel(model_name, device="cpu", compute_type="int8")
-    )
+    model = WhisperModel(model_name, device="cpu", compute_type="int8")
     t0 = time.time()
-    segments, _ = pipeline.transcribe(
-        str(audio), language="en", beam_size=1, batch_size=batch_size, word_timestamps=True
-    )
+    if batch_size and batch_size > 1:
+        segments, _ = BatchedInferencePipeline(model=model).transcribe(
+            str(audio), language="en", beam_size=1, batch_size=batch_size,
+            word_timestamps=True,
+        )
+    else:
+        segments, _ = model.transcribe(
+            str(audio), language="en", beam_size=1, word_timestamps=True
+        )
     words: list[Recognised] = []
     for segment in segments:
         for word in segment.words or []:
@@ -508,50 +543,95 @@ def main() -> int:
         sys.exit("no words in narration text")
 
     t0 = time.time()
-    heard, asr_seconds = recognise(args.audio, args.asr_model, args.batch_size)
-    measured = attach_times(canon, heard)
-    dropped = drop_implausible_anchors(canon)
-    measured -= dropped
-    holes = fill_holes(canon)
-    clamped = enforce_monotonic(canon, duration)
+    # Audio-only, so they do not depend on which recognition pass wins below.
     silences = detect_silences(args.audio)
-    cues = build_cues(canon, text)
     delivery = probe_delivery(args.audio)
-
-    words = [
-        {"text": c.text, "start": round(c.start, 3), "end": round(c.end, 3)} for c in canon
-    ]
-    for word, c in zip(words, canon):
-        if not c.measured:
-            word["interpolated"] = True
-
-    mapped = map_page_words(words, canon, args.map) if args.map and args.map.exists() else 0
-
-    measured_share = measured / len(canon)
-    agreement = cue_pause_agreement(cues, silences)
-    longest_hole = max(holes, default=0)
-    cue_lengths = sorted(c["end"] - c["start"] for c in cues)
 
     def pct(values: list[float], q: float) -> float:
         return round(values[min(len(values) - 1, int(len(values) * q))], 3) if values else 0.0
 
-    issues = []
-    if measured_share < MIN_MEASURED_SHARE:
-        issues.append(
-            f"only {100 * measured_share:.1f}% of words carry a measured time "
-            f"(gate {100 * MIN_MEASURED_SHARE:.0f}%)"
-        )
-    if longest_hole > MAX_INTERPOLATED_RUN:
-        issues.append(
-            f"{longest_hole} consecutive interpolated words (gate {MAX_INTERPOLATED_RUN})"
-        )
-    if agreement < MIN_CUE_PAUSE_AGREEMENT:
-        issues.append(
-            f"only {100 * agreement:.0f}% of cue cuts land at a detected pause "
-            f"(gate {100 * MIN_CUE_PAUSE_AGREEMENT:.0f}%)"
-        )
-    if cue_lengths and cue_lengths[-1] > MAX_CUE_SECONDS * 2:
-        issues.append(f"longest cue {cue_lengths[-1]:.1f}s")
+    def align(heard: list[Recognised]) -> dict:
+        """One full alignment against one recognition. Builds its own canonical words.
+
+        `canon` is mutated by `attach_times`, `drop_implausible_anchors` and `fill_holes`, so
+        a retry must start from a fresh list rather than a partly-timed one.
+        """
+        canon = canonical_words(text)
+        measured = attach_times(canon, heard)
+        dropped = drop_implausible_anchors(canon)
+        measured -= dropped
+        holes = fill_holes(canon)
+        clamped = enforce_monotonic(canon, duration)
+        cues = build_cues(canon, text)
+
+        words = [
+            {"text": c.text, "start": round(c.start, 3), "end": round(c.end, 3)} for c in canon
+        ]
+        for word, c in zip(words, canon):
+            if not c.measured:
+                word["interpolated"] = True
+
+        mapped = (map_page_words(words, canon, args.map)
+                  if args.map and args.map.exists() else 0)
+
+        measured_share = measured / len(canon)
+        agreement = cue_pause_agreement(cues, silences)
+        longest_hole = max(holes, default=0)
+        cue_lengths = sorted(c["end"] - c["start"] for c in cues)
+
+        issues = []
+        if measured_share < MIN_MEASURED_SHARE:
+            issues.append(
+                f"only {100 * measured_share:.1f}% of words carry a measured time "
+                f"(gate {100 * MIN_MEASURED_SHARE:.0f}%)"
+            )
+        if longest_hole > MAX_INTERPOLATED_RUN:
+            issues.append(
+                f"{longest_hole} consecutive interpolated words (gate {MAX_INTERPOLATED_RUN})"
+            )
+        if agreement < MIN_CUE_PAUSE_AGREEMENT:
+            issues.append(
+                f"only {100 * agreement:.0f}% of cue cuts land at a detected pause "
+                f"(gate {100 * MIN_CUE_PAUSE_AGREEMENT:.0f}%)"
+            )
+        if cue_lengths and cue_lengths[-1] > MAX_CUE_SECONDS * 2:
+            issues.append(f"longest cue {cue_lengths[-1]:.1f}s")
+
+        return {
+            "canon": canon, "measured": measured, "dropped": dropped, "clamped": clamped,
+            "cues": cues, "words": words, "mapped": mapped, "heard": heard,
+            "measured_share": measured_share, "agreement": agreement,
+            "longest_hole": longest_hole, "cue_lengths": cue_lengths, "issues": issues,
+        }
+
+    heard, asr_seconds = recognise(args.audio, args.asr_model, args.batch_size)
+    result = align(heard)
+    # Batching buys 20x realtime but sometimes misplaces a segment, which reaches the aligner
+    # as a false anchor and opens a hole in a correct recording. Recognise again unbatched
+    # before believing the failure. See `recognise`.
+    if result["issues"] and args.batch_size and args.batch_size > 1:
+        print(f"  gates failed on the batched pass ({'; '.join(result['issues'])}); "
+              f"re-recognising unbatched", file=sys.stderr)
+        retry_heard, retry_seconds = recognise(args.audio, args.asr_model, 1)
+        retry = align(retry_heard)
+        # Prefer the pass with fewer failures, then the one whose worst hole is smaller. A
+        # bigger measured share is not on its own better: a false anchor *raises* it while
+        # putting words in the wrong place.
+        better = (len(retry["issues"]), retry["longest_hole"]) < \
+                 (len(result["issues"]), result["longest_hole"])
+        asr_seconds += retry_seconds
+        if better:
+            print("  unbatched pass is better; using it", file=sys.stderr)
+            result = retry
+        else:
+            print("  unbatched pass is no better; keeping the batched one", file=sys.stderr)
+
+    canon, measured, dropped = result["canon"], result["measured"], result["dropped"]
+    clamped, cues, words = result["clamped"], result["cues"], result["words"]
+    mapped, heard = result["mapped"], result["heard"]
+    measured_share, agreement = result["measured_share"], result["agreement"]
+    longest_hole, cue_lengths = result["longest_hole"], result["cue_lengths"]
+    issues = result["issues"]
 
     manifest = {
         "format": "tts-rs-narration-v2",
