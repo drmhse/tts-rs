@@ -262,6 +262,19 @@ The last row is the important one. Upstream's FST-based text normalisation is no
 these rules are doing that job by hand; a converter that reports what it could not handle is
 the difference between finding these in minutes and finding them in a published file.
 
+One known limitation, left unfixed deliberately. A clock time of the form `10:01` is spoken
+correctly — the voice says "ten oh one" — but `10:00:02` comes out closer to "ten o'clock,
+two", losing the seconds. It also makes the verifier noisy either way, because recognition
+writes `10:01` as one token (`1001`) where the canonical text splits it into `10` and `01`, so
+the span scores a low word overlap while the audio is right. In one book that was 41 of the
+former against 13 of the latter, all inside incident timelines where the prose carries the
+meaning, and the chapters were already rendered. If you are starting a book that leans on
+timestamps, rewrite `h:mm:ss` in the converter before rendering — "10:01 and 4 seconds" reads
+naturally and costs nothing up front. Do not retrofit it into a rendered book for the seconds
+alone, and be careful changing the *tokenisation* to quiet the verifier: the page tokeniser
+splits on a colon, and diverging from it is what once took a chapter from 100% page-mapped
+to 18.5%.
+
 The bottom half of that table was found by a method worth naming, because reading the
 converted text will not find any of it: put the suspect constructs in one short passage,
 render it, transcribe it back, and diff. Two minutes of audio settles questions that are
