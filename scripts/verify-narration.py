@@ -39,6 +39,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import re
 import subprocess
@@ -168,7 +169,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("files", nargs="+", type=Path)
     ap.add_argument("--tail", type=int, default=35, help="seconds of audio to transcribe")
-    ap.add_argument("--words", type=int, default=6, help="closing words that must appear")
+    ap.add_argument("--words", type=int, default=6, help="closing words to report on")
+    ap.add_argument("--slack", type=int, default=3,
+                    help="script words allowed to go unmatched at the very end; a\n                          homophone costs one or two, truncation costs many")
     ap.add_argument("--pad", type=float, default=3.0, help="seconds around a suspicious span")
     ap.add_argument("--model", default="small.en")
     ap.add_argument("--skip-integrity", action="store_true")
@@ -191,18 +194,32 @@ def main() -> int:
             continue
 
         heard = norm(transcribe(model, audio, tail=args.tail))
-        want = norm(script.read_text())[-args.words :]
-        # A bag comparison: word-order jitter at a sentence end should not fail a good file.
-        # "unverifiable" is the honest word, and worth reading literally before re-rendering.
-        # A near-homophone at the end of a chapter fails this check while the audio is
-        # correct: "those facts are the system's invariants" was reported missing
-        # `system's,invariants` on two independent seeds, and rendering both that phrase and
-        # the recogniser's version of it produced the same transcript for each — the voice
-        # was right and the recogniser cannot tell them apart. Confirm with an A/B render
-        # before spending a re-render on a tail miss that reproduces.
+        script_words = norm(script.read_text())
+        # How far into the script the heard tail *reaches*, rather than which closing words
+        # are literally present. The presence test asked the wrong question and failed correct
+        # files twice in twelve chapters, both times on a homophone the recogniser cannot
+        # resolve: "adding work to writes" heard as "rights", and "the system's invariants" as
+        # "the systems and variants". Rendering both readings of the latter produced the same
+        # transcript for each, so the voice was right and the recogniser cannot tell them
+        # apart — and at two per twelve chapters that is a steady stream of investigations
+        # into nothing.
+        #
+        # Truncation and substitution differ in size, which is what makes them separable. A
+        # chapter that stops early leaves every remaining word unmatched; a homophone leaves
+        # one or two. So align the heard tail against the script's closing words and measure
+        # the shortfall past the last match.
+        tail_scope = script_words[-max(args.words * 20, 60):]
+        blocks = difflib.SequenceMatcher(None, heard, tail_scope,
+                                         autojunk=False).get_matching_blocks()
+        reached = max((pi + size for _, pi, size in blocks if size), default=0)
+        shortfall = len(tail_scope) - reached
+        want = script_words[-args.words :]
         missing = [w for w in want if w not in heard]
-        if missing:
+        if shortfall > args.slack:
             incomplete.append(audio.name)
+        elif missing:
+            # Reached the end, but not word-for-word. Worth seeing, not worth a re-render.
+            missing = [f"~{w}" for w in missing]
 
         findings: list[dict] = []
         man_path = audio.with_name(audio.stem + ".manifest.json")
@@ -212,7 +229,7 @@ def main() -> int:
 
         worst = min((f["overlap"] for f in findings), default=None)
         print(
-            f"{audio.name:<18}{'ok' if not missing else 'CHECK':<9}"
+            f"{audio.name:<18}{'CHECK' if audio.name in incomplete else 'ok':<9}"
             f"{len(findings):<7}{('-' if worst is None else f'{worst:.2f}'):<8}"
             f"{(','.join(missing) or '-'):<22}...{' '.join(heard[-7:])}"
         )
