@@ -141,6 +141,14 @@ BRITISH = {
 }
 
 
+def raw_normalize(word: str) -> str:
+    """Lowercased letters and digits only, with no folding.
+
+    Must match `normalize_word` in md-to-narration.py, which builds the page-word map.
+    """
+    return re.sub(r"[^a-z0-9']", "", word.lower().replace("\u2019", "'"))
+
+
 def normalize(word: str) -> str:
     w = re.sub(r"[^a-z0-9']", "", word.lower().replace("\u2019", "'"))
     return NUMBER_WORDS.get(w) or BRITISH.get(w, w)
@@ -250,7 +258,14 @@ def recognise(audio: Path, model_name: str, batch_size: int
 class Canonical:
     """A word of the book. The book is authoritative for spelling, the audio for timing."""
     text: str
+    # Folded form, for matching against recognition: numbers as digits, British spellings
+    # as American. See `normalize`.
     normalized: str
+    # Unfolded form. The page-word map in `--map` is built by md-to-narration.py with its own
+    # normaliser, which does not fold, so comparing a folded word against it desynchronises
+    # the cursor and the rest of the chapter never maps. That regression took one chapter from
+    # 100% page-mapped to 18.5%.
+    raw: str
     char_start: int
     char_end: int
     start: float | None = None
@@ -264,7 +279,8 @@ class Canonical:
 
 def canonical_words(text: str) -> list[Canonical]:
     return [
-        Canonical(m.group(0), normalize(m.group(0)), m.start(), m.end())
+        Canonical(m.group(0), normalize(m.group(0)), raw_normalize(m.group(0)),
+                  m.start(), m.end())
         for m in WORD.finditer(text)
         if normalize(m.group(0))
     ]
@@ -452,13 +468,13 @@ def map_page_words(words: list[dict], canon: list[Canonical], map_path: Path) ->
     spoken, s2p = pm["spokenWords"], pm["spokenToPageWord"]
     mapped, cursor = 0, 0
     for index, c in enumerate(canon):
-        if cursor >= len(spoken) or spoken[cursor]["normalized"] != c.normalized:
+        if cursor >= len(spoken) or spoken[cursor]["normalized"] != c.raw:
             for ahead in range(1, 25):
                 if (cursor + ahead < len(spoken)
-                        and spoken[cursor + ahead]["normalized"] == c.normalized):
+                        and spoken[cursor + ahead]["normalized"] == c.raw):
                     cursor += ahead
                     break
-        if cursor < len(spoken) and spoken[cursor]["normalized"] == c.normalized:
+        if cursor < len(spoken) and spoken[cursor]["normalized"] == c.raw:
             page_index = s2p[cursor]
             if page_index >= 0:
                 words[index]["pageWordIndex"] = page_index
