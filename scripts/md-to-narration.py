@@ -18,6 +18,11 @@ choices a narrator would:
     same pause in speech, and the engines' tokenizers handle it more predictably.
   * **Code blocks are dropped by default** (`--keep-code` to narrate them). Reading shell
     syntax aloud is noise, not content.
+  * **Inline code spans are verbalised, not dropped.** A span sits inside a sentence, so
+    deleting it leaves a hole the listener hears as a mistake ("a conditional update can
+    protect a simple state transition: proves the precondition"). `speak_code` turns the
+    span into the words a narrator would actually say: identifiers keep their words,
+    operators become English, and CamelCase event names are split. See its docstring.
   * **HTML comments are dropped.** Not cosmetic: this book carries
     `<!-- ILLUSTRATION-PLACEHOLDER ... -->` blocks holding several hundred words of art
     direction, and an earlier version of this script narrated them ("Editorial line art in
@@ -90,8 +95,154 @@ def resolve_shortcodes(text: str, keep_captions: bool = True) -> str:
     return re.sub(r"\{\{[<%].*?[>%]\}\}", repl, text, flags=re.S)
 
 
+# SQL keywords, which this book writes in upper case. Upper case is a pronunciation
+# instruction to this voice and it obeys it: `WHERE id = ?` was spoken as "WHAE IED", and
+# `UPDATE ... SET` as "UPDAT ... SET" — the letters, not the words. The same statement in
+# lower case reads correctly. Confirmed against a rendered A/B of the identical clause.
+SQL_KEYWORDS = {
+    "SELECT", "INSERT", "UPDATE", "DELETE", "FROM", "WHERE", "SET", "ORDER", "BY", "GROUP",
+    "HAVING", "LIMIT", "OFFSET", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "ON", "AND",
+    "OR", "NOT", "NULL", "VALUES", "INTO", "AS", "DISTINCT", "COUNT", "SUM", "EXISTS",
+    "BETWEEN", "LIKE", "IN", "IS", "CREATE", "TABLE", "INDEX", "UNIQUE", "PRIMARY", "KEY",
+}
+
+
+def _split_camel(token: str) -> str:
+    """`OrderCancellationAccepted` -> "Order cancellation accepted".
+
+    The split is what makes the voice read words instead of one fused token. Lowercasing the
+    tail is what keeps it from mangling them: "Order Cancellation Accepted" came back as
+    "order, scancelation accepted", while the same phrase in sentence case was clean. Every
+    interior capital in an identifier is a word boundary, not an emphasis.
+    """
+    parts = re.split(r"(?<=[a-z0-9])(?=[A-Z])", token)
+    if len(parts) == 1:
+        return token
+    return parts[0] + " " + " ".join(p.lower() for p in parts[1:])
+
+
+def speak_code(inner: str) -> str:
+    """The contents of one inline code span, as a narrator would read it aloud.
+
+    Dropping the span is not an option: it is a sentence constituent, and removing it leaves
+    a sentence with a hole in it. Reading it literally is not an option either — the raw
+    characters give "seats set remaining equals sign remaining minus sign one", or worse,
+    silence where the symbol was.
+
+    Most spans in a systems book are identifiers, and those need almost nothing: the
+    snake_case rule downstream already says "tenant id". The two that need work are
+
+      * CamelCase domain names — `PaymentCaptured`, `OrderCancellationAccepted`. Split at
+        the internal capital so the voice reads two words. Done here rather than globally
+        because prose is full of CamelCase that must survive intact: SaaS, NoSQL, GraphQL.
+        Being inside backticks is the signal that a token is an identifier.
+      * operators — a handful of spans are query fragments, and an operator carries the
+        meaning of the clause. `remaining > 0` is a precondition; drop the `>` and the
+        sentence asserts nothing.
+
+    These words are spoken but do not exist on the page, so they align to nothing and cost
+    a little mapping coverage. Across this book that is roughly sixty words in 158,000, and
+    the alternative is a sentence the listener cannot follow.
+    """
+    s = inner.strip()
+    if not s:
+        return ""
+    # CamelCase, but not an all-caps run: `PaymentCaptured` splits, `SLO` and `ID` do not.
+    s = re.sub(r"[A-Za-z][A-Za-z0-9]*", lambda m: _split_camel(m.group(0)), s)
+    # An all-caps SQL keyword is spelled out rather than read; see SQL_KEYWORDS.
+    s = re.sub(r"\b[A-Z]+\b",
+               lambda m: m.group(0).lower() if m.group(0) in SQL_KEYWORDS else m.group(0), s)
+    # SCREAMING_SNAKE identifiers — the graph edge labels `OBSERVED_AT_IP`, `USED_DEVICE`,
+    # `CONTACTED_FROM`. Upper case sends this voice into spelling mode and it does not even
+    # spell accurately: `OBSERVED_AT_IP, USED_DEVICE, USED_CARD` was rendered "OBS or VAT.
+    # ATIP, USE device, USE card". The same labels in lower case came back verbatim. An
+    # underscore is what distinguishes an identifier from an acronym like `API` or `SLO`,
+    # which must keep its capitals to be spelled on purpose.
+    # No `\b` around the run: an underscore is itself a word character, so `\bOBSERVED\b`
+    # never matches inside `OBSERVED_AT_IP`.
+    #
+    # Two triggers, because one label in the same list of edge types has no underscore at
+    # all (`REFERRED`) and would otherwise have been the only one spelled out. A run of four
+    # or more capitals inside backticks is a word, not an initialism: every acronym this book
+    # puts in a code span is a SQL keyword, and every acronym that must keep its capitals to
+    # be spelled deliberately — API, SLO, RPO, TTL — appears in prose, which never reaches
+    # this function.
+    if "_" in inner:
+        s = re.sub(r"[A-Z]{2,}", lambda m: m.group(0).lower(), s)
+    s = re.sub(r"[A-Z]{4,}", lambda m: m.group(0).lower(), s)
+    # Call and tuple syntax. `PaymentCaptured(provider_transaction_id)` reads as an event
+    # and the field it carries; a comma is the pause that says so.
+    s = re.sub(r"\s*\(\s*", ", ", s)
+    s = re.sub(r"\s*\)\s*", " ", s)
+    # `product:{id}` is one key template, not two things.
+    s = re.sub(r"[{}]", "", s)
+    s = re.sub(r"\s*:\s*", " ", s)
+    # Two-character operators first, or `>=` becomes "greater than equals".
+    for pat, word in (
+        (r">=", " at least "), (r"<=", " at most "), (r"!=", " not equal to "),
+        (r"=", " equals "), (r">", " greater than "), (r"<", " less than "),
+        (r"\+", " plus "),
+    ):
+        s = re.sub(r"\s*" + pat + r"\s*", word, s)
+    # Only a spaced hyphen is arithmetic. An unspaced one belongs to `B-tree`, `us-east-2a`
+    # or an illustrative identifier like `customer-84`.
+    s = re.sub(r"(?<=\s)-(?=\s)", "minus", s)
+    # A bound parameter. Naming it is what a narrator does; "question mark" is not.
+    s = re.sub(r"\s*\?", " a parameter", s)
+    # A path or a slash-joined pair inside code: the separator is not spoken.
+    s = re.sub(r"\s*/\s*", " ", s)
+    s = s.replace(",", ", ")
+    # Abbreviations that are read, not spelled, when they appear in an index definition.
+    s = re.sub(r"\bDESC\b", "descending", s, flags=re.I)
+    s = re.sub(r"\bASC\b", "ascending", s, flags=re.I)
+    return re.sub(r"\s+", " ", s).strip(" ,")
+
+
+# Compound acronyms and slash pairs that are spoken as their parts, not as "slash". Anything
+# else keeps a spoken separator, chosen below by whether the source spaced the slash.
+SLASH_PAIRS = re.compile(r"\b(I/O|pub/sub|read/write|write/read|and/or)\b", re.I)
+
+# A currency amount with the scale word that may follow it. Both are needed together: the
+# unit is spoken after a scale ("4.76 million dollars") but before the fraction ("4 dollars
+# 82 cents"), and no rule reading only the digits can tell those apart.
+CURRENCY = re.compile(
+    r"(\b(?:a|an|the)\s+(?:[a-z]+\s+){0,2})?"
+    r"\$(\d+(?:,\d{3})*)(?:\.(\d+))?(\s+(?:thousand|million|billion|trillion))?"
+    r"(\s+[a-z]+)?\b", re.I
+)
+
+# Words that, following an amount, mean the amount is the noun rather than modifying one.
+# "credit $12 to platform fee revenue" keeps the plural; "a $12 platform fee" does not.
+NOT_A_NOUN = {
+    "to", "from", "and", "or", "for", "in", "on", "of", "at", "than", "while", "unless",
+    "per", "by", "is", "was", "were", "after", "before", "with", "under", "over", "but",
+}
+
+
+def _speak_currency(m: re.Match) -> str:
+    det, whole, frac, scale, tail = m.groups()
+    tail = tail or ""
+    # Attributive use: "a $12 platform fee" is spoken "a 12 dollar platform fee", singular.
+    # An article ahead of the amount and a noun behind it are the two cheap signals; either
+    # one alone is wrong often enough to matter, since an article can belong to an earlier
+    # clause and a following lowercase word is as likely to be a preposition as a noun.
+    if det and not scale and not frac and tail.strip() and tail.strip() not in NOT_A_NOUN:
+        return f"{det}{whole} dollar{tail}"
+    det = det or ""
+    if scale:
+        # "4.76 million dollars". Cents make no sense at this magnitude, and the decimal is
+        # part of the quantity rather than a separate unit.
+        amount = f"{whole}.{frac}" if frac else whole
+        return f"{det}{amount}{scale} dollars{tail}"
+    if frac and len(frac) == 2:
+        return f"{det}{whole} dollars {frac} cents{tail}"
+    if frac:
+        return f"{det}{whole} point {frac} dollars{tail}"
+    return f"{det}{whole} dollars{tail}"
+
+
 def clean_inline(line: str) -> str:
-    line = re.sub(r"`([^`]*)`", r"\1", line)              # inline code
+    line = re.sub(r"`([^`]*)`", lambda m: speak_code(m.group(1)), line)  # inline code
     line = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", line)      # images
     line = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", line)  # links keep their text
     # Markdown task-list markers. `- [ ] item` keeps its bullet stripped elsewhere, but the
@@ -130,6 +281,35 @@ def clean_inline(line: str) -> str:
     # Arrows carry the meaning of a chain and were being dropped, leaving a list of nouns with
     # no relationship between them — "agency account client source export change digest".
     line = re.sub(r"\s*(?:->|=>|\u2192|\u21d2)\s*", ", then ", line)
+    # A fill-in blank in a template sentence: "We chose this system because ___." The rules
+    # above leave it alone (the italic rule needs non-underscore content between the markers,
+    # the snake_case rule needs word characters on both sides), so it reached the voice, and
+    # a run of identical characters is the input most likely to send the LLM into a loop.
+    # Saying "blank" is what a narrator reading a worksheet aloud does.
+    line = re.sub(r"_{2,}", "blank", line)
+    # Currency. `$120` is otherwise read as "120" with the unit silently dropped, which in a
+    # cost chapter changes the sentence's meaning rather than its polish. Where the unit goes
+    # depends on what follows the number, and getting that wrong is worse than dropping it:
+    # a first attempt turned `$4.8 million` into "4 dollars.8 million", which is both wrong
+    # and a sentence boundary the segmenter would have believed.
+    line = CURRENCY.sub(_speak_currency, line)
+    line = re.sub(r"(\d)\s*%", r"\1 percent", line)
+    # An identifier of the form `I-2048` \u2014 an illustrative invoice or order number. The
+    # hyphen between a letter and digits is not spoken; the space keeps the letter separate
+    # so it is not swallowed into the number.
+    line = re.sub(r"\b([A-Za-z])-(\d)", r"\1 \2", line)
+    # Slashes. A spaced slash comes from a table cell listing alternatives, where a comma is
+    # the reading. An unspaced one joins two alternatives in prose ("warehouse/lakehouse"),
+    # where "or" is the reading. The compound acronyms are neither.
+    line = SLASH_PAIRS.sub(lambda m: m.group(1).replace("/", " "), line)
+    # A slash with nothing after it: a table cell ended on an open alternation
+    # ("versioned amendment /"). Nothing to separate, so nothing to say.
+    line = re.sub(r"\s*/\s*(?=[.,;:!?]|$)", "", line)
+    line = re.sub(r"\s+/\s+", ", ", line)
+    line = re.sub(r"(?<=[A-Za-z])/(?=[A-Za-z])", " or ", line)
+    # `B+tree` in prose rather than in a code span, where the plus is part of the name and
+    # is spoken. Only between word characters, so a stray plus is still dropped downstream.
+    line = re.sub(r"(?<=[A-Za-z0-9])\+(?=[A-Za-z0-9])", " plus ", line)
     line = line.replace("~~", "")
     # Catch-all. Any asterisk still here is unmatched or nested in a way the rules above did
     # not anticipate, and there is no reading of one that belongs in speech. Removing it
