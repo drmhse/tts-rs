@@ -317,6 +317,29 @@ def clean_inline(line: str) -> str:
     # missed marker is not a small blemish — it is a degenerate loop that destroys the
     # passage. The `--stats` scan reports anything else that looks like surviving markup.
     line = line.replace("*", "")
+    # A semicolon joins independent clauses, and a listener has no way to hear the join. Read
+    # each clause as its own sentence instead, which is also what keeps segments short: this
+    # book puts semicolon lists inside table cells, and one such row reached the voice as a
+    # single 218-character segment carrying eight noun phrases. It came out as "QH, WEF codes,
+    # and paid boot and fulfilled orders" for "queue age, webhook retries, and
+    # paid-but-unfulfilled orders". Split into sentences, the same clause renders correctly.
+    #
+    # The damage is not confined to that row. Across this book there are 562 semicolons and
+    # 249 sentences over the engine's 220-character segment budget, so a segment packed with
+    # disconnected clauses is the normal case rather than an outlier.
+    # The optional quote is not decoration: this book's semicolon clauses often open on a
+    # quoted term ('is vague; "complete through the previous UTC day" is not'), and a rule
+    # expecting a word character right after the semicolon skips every one of them.
+    # Smart quotes are still smart at this point — they are folded to ASCII further down — so
+    # the class has to list them, or the four clauses that open on a curly quote are missed.
+    line = re.sub(r"\s*;\s+([\"'“‘]?)(\w)",
+                  lambda m: ". " + m.group(1) + m.group(2).upper(), line)
+    line = re.sub(r"\s*;\s*$", ".", line)
+    # A hyphen between two lower-case words is a compound modifier. It is not spoken, and
+    # leaving it in makes the voice fuse the parts: `paid-but-unfulfilled` was rendered "paid
+    # button fulfilled". Spacing it also improves page-word mapping, because the page's own
+    # tokeniser already treats a hyphen as a boundary.
+    line = re.sub(r"(?<=[a-z])-(?=[a-z])", " ", line)
     # An em dash is a pause in print; a comma is the same pause in speech.
     line = re.sub(r"\s*[—–]\s*", ", ", line)
     line = line.replace("…", "...")

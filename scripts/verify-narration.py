@@ -193,6 +193,13 @@ def main() -> int:
         heard = norm(transcribe(model, audio, tail=args.tail))
         want = norm(script.read_text())[-args.words :]
         # A bag comparison: word-order jitter at a sentence end should not fail a good file.
+        # "unverifiable" is the honest word, and worth reading literally before re-rendering.
+        # A near-homophone at the end of a chapter fails this check while the audio is
+        # correct: "those facts are the system's invariants" was reported missing
+        # `system's,invariants` on two independent seeds, and rendering both that phrase and
+        # the recogniser's version of it produced the same transcript for each — the voice
+        # was right and the recogniser cannot tell them apart. Confirm with an A/B render
+        # before spending a re-render on a tail miss that reproduces.
         missing = [w for w in want if w not in heard]
         if missing:
             incomplete.append(audio.name)

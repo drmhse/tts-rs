@@ -251,11 +251,24 @@ rule exists because its absence produced audible damage:
 | unwrap `[ ]` task markers, `[placeholder]` and `<name>` | bracket punctuation read aloud, 34 times in one section |
 | capitalise the first word of each paragraph | lowercase openers mispronounced — "complain" as "Dock and plane", 6 of 8 sampled wrong |
 | space compounds the voice cannot say (`timezone`, `signup`) | "Heideheb" and "SignGen" |
+| downcase SQL keywords and `SCREAMING_SNAKE` labels inside code spans | upper case switching the voice to spelling mode, inaccurately: `WHERE id = ?` as "WHAE IED", `OBSERVED_AT_IP, USED_DEVICE` as "OBS or VAT. ATIP, USE device" |
+| split `CamelCase` identifiers to sentence case, not title case | "Order Cancellation Accepted" as "order, scancelation accepted"; the same phrase in sentence case is verbatim |
+| verbalise operators, bound parameters, blanks and slashes in code spans | a sentence asserting nothing once `>` is dropped from `remaining > 0`; `___` as a run of underscores, which is the input most likely to start a repetition loop |
+| place the currency unit by what follows the amount | `$4.8 million` as "4 dollars.8 million" — wrong, and a full stop the segmenter believes |
+| read a semicolon as a sentence break; space compound hyphens | one table row reaching the voice as a single 218-character segment of eight noun phrases, rendered "QH, WEF codes, and paid boot and fulfilled orders" for "queue age, webhook retries, and paid-but-unfulfilled orders" |
 | warn on surviving markup | all of the above shipping silently |
 
 The last row is the important one. Upstream's FST-based text normalisation is not ported, so
 these rules are doing that job by hand; a converter that reports what it could not handle is
 the difference between finding these in minutes and finding them in a published file.
+
+The bottom half of that table was found by a method worth naming, because reading the
+converted text will not find any of it: put the suspect constructs in one short passage,
+render it, transcribe it back, and diff. Two minutes of audio settles questions that are
+otherwise guesses — it distinguished a real defect from a sampling glitch twice (`B-tree` and
+"granularity" both came back correct on a second draw), and it proved each fix by re-rendering
+the identical clause. Do this before a long render, not after: the same evidence costs two
+minutes up front or a full re-render later.
 
 ### Cue length is the number that matters
 
