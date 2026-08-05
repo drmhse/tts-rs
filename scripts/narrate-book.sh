@@ -6,7 +6,7 @@
 #
 # Discovers chapters in either layout this site uses:
 #
-#   flat    introduction.md, chapter-N.md, conclusion.md      (the-change-interface)
+#   flat    introduction.md, chapter-N.md, conclusion.md
 #   nested  part-NN-*/chapter-NNN-slug.md                      (every other book)
 #
 # `_index.md` is skipped at every level — those are landing pages, not narration content.

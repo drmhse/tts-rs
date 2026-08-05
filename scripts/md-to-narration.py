@@ -195,10 +195,10 @@ def render_tables(text: str) -> str:
     Each row becomes its own short sentences, so the engine's sentence segmentation keeps
     every prompt small:
 
-        | Partner | DevRel provides    | DevRel requires |
+        | Partner | Provides           | Requires        |
         | Product | field synthesis... | roadmap context... |
 
-        -> "Product. DevRel provides: field synthesis... DevRel requires: roadmap context..."
+        -> "Product. Provides: field synthesis... Requires: roadmap context..."
 
     A single-column or header-only table degrades to its cells as sentences, which is still
     speakable.

@@ -14,8 +14,8 @@ Also writes `audio` and `audio_duration` into each chapter's TOML front matter, 
 what makes the player appear at all (`{{- if $audio -}}`).
 
 Usage:
-    publish-narration.py --narration narration --site ../swe-verify \\
-        --slug the-change-interface [--dry-run]
+    publish-narration.py --narration narration --site ../site \\
+        --slug <book-slug> [--dry-run]
 """
 from __future__ import annotations
 
@@ -38,10 +38,10 @@ def site_dir(stem: str) -> str:
 def find_sources(content: Path) -> dict[str, Path]:
     """Map a narration stem to the markdown that produced it.
 
-    Books are laid out two ways in this site. `the-change-interface` is flat —
-    `chapter-1.md` beside `introduction.md`. Every other book nests chapters inside
-    `part-NN-*/` directories and names them `chapter-NNN-slug.md`. Searching recursively and
-    keying on the chapter *number* handles both without the caller having to say which.
+    Books come in two layouts. A flat one keeps `chapter-1.md` beside `introduction.md`; a
+    nested one puts chapters inside `part-NN-*/` directories named `chapter-NNN-slug.md`.
+    Searching recursively and keying on the chapter *number* handles both without the caller
+    having to say which.
 
     `_index.md` is excluded at every level: those are landing pages for the book and its
     parts, not narration content.

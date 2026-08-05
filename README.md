@@ -46,6 +46,27 @@ passage, and **3–4 s to load against 15–17 s**. The durable job queue and fo
 are not implemented and answer `501` rather than pretending. Details, and what it refuses
 to do, in **[docs/serving.md](docs/serving.md)**.
 
+## Narrating long documents
+
+Markdown in, delivery audio plus word-level timings out, for a document of any length:
+
+```sh
+scripts/narrate-book.sh --book path/to/document --out narration --engine cosyvoice
+scripts/verify-narration.py narration/*.webm
+```
+
+One engine load for the whole run, resumable per *stage* (a section with a WAV master is
+never re-synthesised), deterministic under a seed, and gated: every section reports the share
+of words carrying a time measured from the audio, the longest run it could not measure, and
+how many cue boundaries land on a silence `ffmpeg` detected independently. A 16-hour document
+costs about 12 hours of synthesis and an hour of recognition.
+
+Timings come from recognising the audio and matching it to the source text, not from placing
+known words into assumed windows — that shortcut measured a **median error of 4.8 s per
+word** while reporting 99.4% of words "aligned". The reasoning, the text rules that keep the
+voice from reading markup aloud, and the gates are in
+**[docs/serving.md](docs/serving.md)**.
+
 ## Using it as a library
 
 ```rust

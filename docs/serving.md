@@ -112,129 +112,293 @@ Real streaming needs the flow decoder to run on chunks with a carried cache; see
 [porting/cosyvoice.md](porting/cosyvoice.md).
 
 
-## Narrating a book (deprecated entry point)
+## Narrating a long document
 
-`scripts/narrate.sh` is the batch path: markdown in, Opus out.
+`scripts/narrate-book.sh` is the batch path: markdown in, WebM/Opus plus alignment manifests
+out. One command from source to publishable:
 
 ```sh
-scripts/narrate.sh --engine cosyvoice --out narration path/to/chapter-*.md
+scripts/narrate-book.sh --book path/to/document --out narration --engine cosyvoice
 ```
 
-It loads the engine **once** and serves every chapter from it, refuses to start when another
-`tts` process holds the GPU, skips chapters whose output already exists (so an interrupted
-book resumes), and keeps going when one chapter fails rather than abandoning the rest.
+It loads the engine **once** for the whole run, refuses to start when another `tts` process
+holds the GPU, and keeps going when one section fails rather than abandoning the rest.
 
-### Why Opus at 32 kbps
+Sections are discovered in either layout:
 
-Measured against the lossless WAV on a 17-minute chapter, with faster-whisper WER as the
-quality proxy:
+| layout | files |
+|---|---|
+| flat | `introduction.md`, `chapter-N.md` (numeric order), `conclusion.md` |
+| nested | `part-NN-*/chapter-NNN-slug.md`, recursively, ordered by chapter number |
+
+`_index.md` is skipped at every level — a landing page is not narration content. Output names
+normalise to `chapter-NNN` so the published directory layout does not depend on the source
+filename's slug.
+
+Per section:
+
+| step | tool | out |
+|---|---|---|
+| markdown -> narration text + page-word map | `md-to-narration.py --emit-map` | `.txt`, `.map.json` |
+| text -> audio | `tts-serve`, one server for the whole run | `.wav` master |
+| audio -> delivery format | ffmpeg, WebM/Opus 48 kbps | `.webm` |
+| audio + text -> timings | `align-narration.py` | `.manifest.json` |
+
+`scripts/narrate.sh` is the older single-stage entry point and is kept only for one-off
+renders; it has none of the resumability or verification below.
+
+### Resume per stage, not per section
+
+Synthesis is the only expensive step, so it is the only one that must never repeat:
+
+- a section with a manifest is skipped entirely
+- a section with a WAV master is not re-synthesised, only re-encoded and re-aligned
+- the server starts only if something actually needs synthesising
+
+A run killed three sections in therefore costs nothing to restart. Renders are deterministic
+(seed 1234 by default), so a resumed run produces the same audio rather than a different
+valid draw.
+
+That determinism has a consequence worth stating plainly: **re-rendering unchanged text
+cannot repair a bad draw.** It reproduces the same audio byte for byte. Use `--seed` to get a
+different trajectory when a section comes out wrong for sampling reasons rather than input
+reasons.
+
+One guard exists because the alternative fails silently: when a WAV master already exists and
+the converter now produces different text, the text is **not** overwritten and a warning is
+printed. Otherwise deleting a manifest to force a re-align would align yesterday's audio
+against today's text, producing a manifest that describes words the voice never said.
+
+### Segmentation must be bounded
+
+Text is split into paragraphs, then into segments of whole sentences within `max_chars`
+(default 220). Segmentation decides prompt length, batch shape, where silence is inserted,
+and where the waveform can be cut.
+
+For a long time the budget was applied only when *merging* sentences, so a single sentence
+longer than the budget passed through whole — one reached 566 characters, about 38 seconds of
+speech. The AR loop masks `eos` only for the first `2 * text_tokens` steps and may end the
+sequence anywhere after that. On those long segments it did, mid-clause.
+
+Nothing downstream could detect it. The vocoder renders whatever tokens it receives, so the
+output duration matches the tokens produced rather than the text that should have produced
+them: a file that is internally consistent, correct in length, and missing a clause. **24
+segments across one book, roughly two minutes of text present in the source and absent from
+the audio.**
+
+`tts_core::text::segment` now splits an over-long sentence at clause punctuation, then at word
+boundaries, so no segment can exceed the budget. Clause punctuation is preferred because the
+inserted segment gap lands where the voice would already pause. Tests pin the invariant.
+
+The engine also compares each segment's speech tokens per character against the median for
+the request, regenerates outliers, and fails with the offending text if they persist. A
+median measured from this voice and this text is a better reference than a words-per-minute
+constant. Its limit: a segment losing a 49-character clause out of 220 sits near 0.78 of the
+median, inside any threshold loose enough to avoid false positives. Token counts cannot see a
+partial loss inside a merged segment, which is why recognition is the acceptance test.
+
+### Alignment is derived from the audio
+
+Knowing the script suggests an attractive shortcut: skip recognition, cut the script into
+sentence windows, give each a slice of the timeline proportional to its character count, and
+let a forced aligner place known words inside each window. It is about five times cheaper.
+
+Measured against the audio it produced a **median error of 4.8 s per word**, with only 11.9%
+of words within half a second of where they were spoken. A forced aligner places words
+*inside the span it is handed*, cannot reject a bad span, and cannot report receiving one.
+Character-proportional spans assume a constant speaking rate, which narration violates at
+every heading, paragraph break and inserted gap.
+
+The statistics that shipped alongside it could not see the problem. `alignedShare` says words
+*received* timestamps; a coverage figure says they *span the file*. Neither says a timestamp
+is where the word is.
+
+What `align-narration.py` does instead:
+
+1. **Recognise** with batched `faster-whisper` and `word_timestamps=True` — measured **20.4x
+   realtime** on CPU, 51 s for a 17-minute section. Batching matters; the unbatched path is
+   7.8x on the same machine.
+2. **Match** the recognised sequence against the document's canonical words with
+   `difflib.SequenceMatcher`, so each canonical word inherits a measured time while the
+   document stays authoritative for spelling.
+3. **Interpolate** only the remainder, marking each such word `interpolated`.
+4. **Cut cues** at measured pauses.
+
+Three details that cost real time:
+
+- **`autojunk` must be off.** It treats tokens in more than 1% of a long sequence as junk,
+  which in a 2500-word section discards `the`, `to`, `of` and `a` — several hundred of the
+  most reliable anchors in the text.
+- **Anchors need support.** A size-1 matching block on `and` pairs unrelated occurrences; two
+  such matches pinned 62 canonical words into 1.1 s. A run of three words is required, and any
+  anchor pair implying more than 5 words/second is rejected (narration runs 2.5-3), dropping
+  the weaker member so the region becomes an honest gap.
+- **No second acoustic pass.** wav2vec2 forced alignment inside the recognised windows placed
+  1764 of 2524 words against recognition's 2488, drift p90 4.03 s, and subdividing the
+  failures made it worse. It discarded timings that were already correct.
+
+### Text preparation carries most of the quality
+
+`md-to-narration.py` strips what is not speech and rewrites what the voice reads wrong. Every
+rule exists because its absence produced audible damage:
+
+| rule | prevents |
+|---|---|
+| strip front matter, code, HTML comments, shortcodes | narrating art direction and metadata |
+| handle `***bold italic***` before `**bold**`, then sweep any stray `*` | the voice reading "asterisk, asterisk, asterisk", then degenerating into `"asterisksisks"` |
+| anchor `_italics_` to word boundaries; read `snake_case` as words; speak arrows as ", then" | `agency_account -> client -> source_export` fusing into `agencyaccount` and `sourceexport` |
+| render tables row by row as short sentences | a run-on with no sentence boundaries; one produced 21 s of babble |
+| unwrap `[ ]` task markers, `[placeholder]` and `<name>` | bracket punctuation read aloud, 34 times in one section |
+| capitalise the first word of each paragraph | lowercase openers mispronounced — "complain" as "Dock and plane", 6 of 8 sampled wrong |
+| space compounds the voice cannot say (`timezone`, `signup`) | "Heideheb" and "SignGen" |
+| warn on surviving markup | all of the above shipping silently |
+
+The last row is the important one. Upstream's FST-based text normalisation is not ported, so
+these rules are doing that job by hand; a converter that reports what it could not handle is
+the difference between finding these in minutes and finding them in a published file.
+
+### Cue length is the number that matters
+
+If the player interpolates the highlight across the active cue rather than sweeping word
+timings, cue length bounds the visible error however precise those timings are. A cue must
+also not span a pause, or words after the pause highlight during silence.
+
+Because word times are measured, the pauses are visible and can be cut on: target ~3 s, break
+at sentence punctuation or a gap over 220 ms, cap the maximum. Median lands at 2.4-3.0 s with
+a worst case under 6 s.
+
+Clamp forward afterwards. A player selecting a cue with `findIndex(t >= s.start && t < s.end)`
+returns the *earlier* cue on an overlap and the highlight jumps backwards.
+
+### Gates
+
+Each manifest carries a `quality` block naming what failed rather than a number that always
+looks healthy:
+
+| gate | catches | observed healthy |
+|---|---|---|
+| measured share | words with no time from the audio | 96.8-99.5% |
+| longest interpolated run | a passage recognition never found | 2-9 words |
+| cue/pause agreement | a manifest shifted against the audio | 82-96% |
+| page-word mapping | highlight cannot find words in the DOM | median 100%, worst 97.7% |
+
+Cue/pause agreement is the one to add first, because it cannot share a failure mode with the
+thing it checks:
+
+```sh
+ffmpeg -v info -i section.webm -af silencedetect=noise=-40dB:d=0.20 -f null -
+```
+
+Silence detection knows nothing about the script, the windows or the aligner. If cues were cut
+where the voice pauses, their boundaries should land inside intervals ffmpeg independently
+calls silence. A manifest can be perfectly self-consistent and still be shifted against the
+audio; that shows up here and nowhere else.
+
+Then verify the delivered files:
+
+```sh
+$ALIGN_PYTHON scripts/verify-narration.py narration/*.webm
+```
+
+It transcribes the closing seconds of each file — proving synthesis reached the end and the
+deliverable decodes — then transcribes every span the aligner could not measure and compares
+what was heard against what should have been said. Low overlap separates an audio defect from
+a recognition miss: one needs a re-render, the other needs nothing.
+
+### The free audit
+
+**A word the voice mangles is never recognised, so it is already flagged `interpolated` in
+every occurrence.** The manifests are therefore a defect report you have already paid for.
+
+Aggregate them and ask which word types are unrecognised in at least 80% of appearances with
+at least three occurrences. On a 146,000-word corpus that left about 37 suspects at no compute
+cost.
+
+Then listen to them, because most are innocent. `countermetric`, `tradeoff`, `codebase` and
+`quickstart` are spoken correctly and merely transcribed as two words; `thirty` is transcribed
+as `30`; `vale` and "Vail" are homophones. Six of the loudest signals were orthography
+differences between recogniser and document rather than defects. Acting on the list without
+listening triggers hours of re-rendering that fixes nothing.
+
+### Delivery format
+
+Delivery is **WebM/Opus at 48 kbps mono**, with the WAV kept beside it as the lossless master
+so re-encoding never needs a re-render.
+
+Bitrate, measured against the lossless WAV on a 17-minute section with faster-whisper WER as
+the quality proxy:
 
 | | size | WER |
 |---|---|---|
 | WAV (source) | 48 MB | 0.018 |
 | MP3 128 kbps | 16 MB | 0.017 |
-| **Opus 32 kbps** | **4.3 MB** | **0.018** |
+| Opus 32 kbps | 4.3 MB | 0.018 |
 | Opus 24 kbps | 3.3 MB | 0.019 |
 
-Opus at 32 kbps is **transparent** — identical WER to the source — at 3.7x smaller than the
-128 kbps MP3 it replaces. 24 kbps starts to cost something measurable, so 32 is the floor
-worth using. Opus resamples to 48 kHz internally; that is how the codec works and is not a
-quality loss.
+Opus is transparent by WER at 32 kbps, and 24 starts to cost something measurable. 48 kbps is
+the default here for consistency with the sites this feeds and to leave headroom above the
+transparency floor; `--bitrate 32k` is a defensible choice that halves the size.
 
-The WAV is kept beside each Opus file as the lossless master, so re-encoding at a different
-bitrate never needs a re-render. Renders are deterministic (seed 1234), so a re-run
-reproduces the same audio rather than a different valid draw.
+**The container is a compatibility decision, not a detail.** Safari's support for Opus in an
+Ogg container is unreliable, while Opus in WebM plays. Shipping `.opus` risks silent playback
+failure on Safari that no amount of correct alignment would fix. Opus resamples to 48 kHz
+internally; that is how the codec works and is not a quality loss.
 
-**One compatibility note:** Ogg Opus is supported by Chrome, Firefox and Edge, and by Safari
-only on recent versions. If the site needs to serve older Safari, keep an MP3 alongside —
-`ffmpeg -i x.wav -c:a libmp3lame -b:a 128k -ac 1 x.mp3` — rather than dropping Opus, since
-every other browser gets the smaller file.
+### What a book costs
+
+Measured on an M4 with 16 GB:
+
+| | |
+|---|---|
+| source | 864,146 characters, 61 sections |
+| audio | 16.1 hours |
+| synthesis | ~11.9 hours at RTF 0.74 |
+| WAV masters | 2.8 GB |
+| delivery | ~336 MB |
+| recognition | ~65 minutes total |
+
+**Sample before committing to a full run.** Render two or three sections, run
+`verify-narration.py` against them, fix what it surfaces, and only then start the rest. Nearly
+every defect described above was visible in the first two sections; finding them one at a time
+across five re-render rounds instead cost roughly eight hours of avoidable compute.
 
 
-## The book pipeline
-
-One command, markdown to publishable:
-
-```sh
-scripts/narrate-book.sh --book path/to/content/books/<slug> --out narration
-```
-
-It discovers `introduction.md`, `chapter-N.md` (numeric order), `conclusion.md`, skipping
-`_index.md` — a landing page, not narration. Per chapter:
-
-| step | tool | out |
-|---|---|---|
-| markdown -> narration text + page-word map | `md-to-narration.py --emit-map` | `.txt`, `.map.json` |
-| text -> audio | `tts-serve`, one server for the whole book | `.wav` |
-| audio -> delivery format | ffmpeg, Opus 32 kbps | `.opus` |
-| audio + text -> timings | `align-narration.py` | `.manifest.json` |
-
-Resumable (a chapter with a manifest is skipped), deterministic (seed 1234), and one failing
-chapter does not abandon the book. Verify with:
+## Publishing into a static site
 
 ```sh
-$ALIGN_PYTHON scripts/verify-narration.py narration/*.opus
-```
-
-### The manifest matches the site's player
-
-`audio-player.js` reads `delivery.segments[]` (`file`, `durationSeconds`, `startSeconds`,
-`endSeconds`), `transcript.segments[]` (`start`, `end`, `wordStart`, `wordEnd`) and
-`transcript.words[]` (`start`, `end`, `text`, optional `pageWordIndex`). This emits exactly
-that.
-
-Three things learned by reading the player rather than guessing:
-
-- **Segment length is what decides whether the highlight tracks the voice.**
-  `updateCumulativeHighlights` interpolates evenly across a segment's words rather than using
-  their timings, so a long segment drifts however precise those timings are. Splitting on
-  `.!?` alone left a **65.9 s** window — a short lead-in ending in a colon followed by a block
-  quote is one "sentence". Clause punctuation and a word-count fallback cap it at ~12 s;
-  median is now 2.4-3.3 s and the worst 11.6 s.
-- **Overlapping segments break `findIndex(s => t >= s.start && t < s.end)`** — it returns the
-  earlier one and the highlight can jump backwards. wav2vec2 emits the odd adjacent pair
-  overlapping by one 20 ms frame (2 of 392 boundaries on one chapter), so word starts and
-  segment starts are clamped forward.
-- **`normalized` and `pageWordNormalized` are not shipped.** The player computes
-  `normalizeWord(word.normalized || word.text)` and defaults `pageWordNormalized` to `""`,
-  so both were duplicating ~2900 strings per chapter. Dropping them took the book's manifests
-  from 4.8 MB to **2.9 MB**.
-
-`pageWordIndex` is what lets the player highlight the *rendered page* instead of falling back
-to `legacyGreedyPageWordMatches`, a fuzzy DOM match. It comes from aligning the narration
-tokens against the page's tokens, and lands at **98.1-100%** across this book.
-
-### Reusing it on another book
-
-Nothing above is book-specific. `--book DIR` handles the `introduction` / `chapter-N` /
-`conclusion` layout; for anything else pass the files in reading order. `--engine audio8`
-switches voice, `--bitrate` the Opus rate, `ALIGN_PYTHON` the interpreter holding whisperx
-(autodetected when possible, and its absence skips manifests rather than failing the run).
-
-
-## Publishing into the Hugo site
-
-```sh
-scripts/publish-narration.py --narration narration --site ../swe --slug the-change-interface
+scripts/publish-narration.py --narration narration --site ../site --slug <book-slug>
 ```
 
 `--dry-run` first; it prints exactly what it would place and change.
 
-It installs each chapter as the site expects — `static/audio/books/<slug>/<dir>/chapter.opus`
-with `manifest.json` beside it — and writes `audio` and `audio_duration` into the chapter's
-TOML front matter, which is what makes the player render at all
-(`layouts/partials/chapter-audio-player.html` is wrapped in `{{- if $audio -}}`).
+It installs each section as a site expecting this layout wants —
+`static/audio/books/<slug>/<dir>/chapter.webm` with `manifest.json` beside it — and writes
+`audio` and `audio_duration` into the section's front matter, which is typically what makes a
+player render at all.
 
-Two details that fail silently if missed:
+The manifest emits what a word-highlighting player needs: `delivery.segments[]` (`file`,
+`durationSeconds`, `startSeconds`, `endSeconds`), `transcript.segments[]` (`start`, `end`,
+`wordStart`, `wordEnd`) and `transcript.words[]` (`start`, `end`, `text`, optional
+`pageWordIndex` and `pageWordNormalized`), plus the delivered container, codec and bitrate
+probed from the file rather than assumed.
 
-- **`delivery.segments[].file` must be the published filename.** The player resolves it with
-  `new URL(segment.file, manifestURL)`, so leaving the working name (`chapter-1.opus`) in a
-  manifest served as `chapter-001/manifest.json` gives a page that renders, a manifest that
-  loads, and audio that 404s. The publisher rewrites it.
-- **The manifest must sit beside the audio.** The template derives its URL with
-  ``replaceRE `[^/]+$` `manifest.json` $audio``, so the directory layout is not a convention
-  to follow loosely.
+Three details that fail silently if missed:
 
-`chapter-N` becomes `chapter-NNN` to match the existing books; `introduction` and `conclusion`
-keep their names, which is safe because the only directory globbing in the site's own scripts
-matches `chapter-part-\d{3}.mp3` *inside* a chapter directory.
+- **`delivery.segments[].file` must be the published filename.** A player resolving it with
+  `new URL(segment.file, manifestURL)` will render the page, load the manifest, and 404 the
+  audio if the working name survives. The publisher rewrites it.
+- **The manifest must sit beside the audio** when the template derives its URL from the audio
+  path.
+- **`pageWordNormalized` is worth shipping.** A player that checks it against the word it finds
+  in the DOM can drop a mismatched index; omitting it to save bytes disables that defence, and
+  a wrong index highlights the wrong word with nothing to notice it.
+
+`chapter-N` becomes `chapter-NNN`; `introduction` and `conclusion` keep their names.
+
+### Reusing it on another document
+
+Nothing above is specific to one book. `--book DIR` handles both layouts; for anything else
+pass files in reading order. `--engine audio8` switches voice, `--bitrate` the Opus rate,
+`--seed` the sampling draw, `--only` a comma-separated list of sections, and `ALIGN_PYTHON`
+the interpreter holding `faster-whisper` (autodetected when possible; its absence skips
+manifests rather than failing the run).
