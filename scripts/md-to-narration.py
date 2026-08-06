@@ -202,6 +202,35 @@ def speak_code(inner: str) -> str:
 # else keeps a spoken separator, chosen below by whether the source spaced the slash.
 SLASH_PAIRS = re.compile(r"\b(I/O|pub/sub|read/write|write/read|and/or)\b", re.I)
 
+# All-caps tokens in *prose* that are ordinary words and must be read, not spelled. Upper case
+# puts this voice into spelling mode, and in prose that is worse than in a code span because it
+# damages what surrounds it: "The API MUST authorize every read, and it MUST NOT trust the
+# client. It SHOULD log the decision" was rendered "The A must authorize every read, and M must
+# not trust the client. It said not trust the client, it said not log the decision, and
+# Chetanet log the token" — a mangled acronym, a lost word, and a repetition loop. The same
+# sentence in lower case is verbatim.
+#
+# Two groups, and both belong here for the same reason. The RFC 2119 keywords are English words
+# a standards document happens to shout. The rest are acronyms that collide with English words,
+# and for every one of them the *word* is the correct reading: a narrator says "rest API",
+# "mime type", "head request", "stride", not the letters. Where an acronym does not collide with
+# a word — SBOM, PKCE, OIDC, SAML — spelling it out is right and the voice does it accurately,
+# so those are deliberately absent.
+#
+# Anything all-caps this list does not cover is reported by `--stats`, which is how the next
+# book's candidates surface without waiting for a listener to find them.
+PROSE_CAPS_AS_WORDS = {
+    "MUST", "SHOULD", "SHALL", "MAY", "REQUIRED", "RECOMMENDED", "OPTIONAL", "NOT",
+    "HEAD", "STORE", "SECRETS", "STRIDE", "REST", "MIME", "PASTA", "SANS", "SOAP", "ACID",
+    "DOM", "GET", "LOG", "MAC", "NET", "RAG", "RUN", "SEC", "WAF", "WEB",
+}
+# Curated per book rather than derived from a dictionary at run time, though a dictionary is a
+# good way to *find* candidates: `grep -qxi` against /usr/share/dict/words surfaced every entry
+# in the second row above, and each was then read in context before being added — "an edge
+# filter or WAF", "dangerous DOM APIs", "a query such as GET invoices". The check is a
+# suggestion, not the rule: an acronym that collides with a word is not automatically read as
+# one, and SEC is the obvious trap in a book about finance rather than security.
+
 # A currency amount with the scale word that may follow it. Both are needed together: the
 # unit is spoken after a scale ("4.76 million dollars") but before the fraction ("4 dollars
 # 82 cents"), and no rule reading only the digits can tell those apart.
@@ -281,6 +310,22 @@ def clean_inline(line: str) -> str:
     # Arrows carry the meaning of a chain and were being dropped, leaving a list of nouns with
     # no relationship between them — "agency account client source export change digest".
     line = re.sub(r"\s*(?:->|=>|\u2192|\u21d2)\s*", ", then ", line)
+    # `ATT&CK` is a proper name pronounced "attack", and the ampersand is silent in it. Read
+    # literally it becomes "ATT and CK", which is neither the name nor a word.
+    line = re.sub(r"\bATT&CK\b", "attack", line)
+    # `AUTHZ` and `AUTHN` are jargon contractions, not initialisms; the voice made "EOTHZ" of
+    # the first. Spacing the trailing letter is what a reader says: "auth Z".
+    line = re.sub(r"\bAUTHZ\b", "auth Z", line, flags=re.I)
+    line = re.sub(r"\bAUTHN\b", "auth N", line, flags=re.I)
+    # An all-caps word that is a word. See PROSE_CAPS_AS_WORDS.
+    line = re.sub(r"\b[A-Z]{3,}\b",
+                  lambda m: m.group(0).lower() if m.group(0) in PROSE_CAPS_AS_WORDS
+                  else m.group(0), line)
+    # "Level 2+" means level two or higher, and the plus is not spoken as a word here — it is
+    # a comparison. The general `+` rule below only fires between word characters.
+    line = re.sub(r"(\d)\s*\+(?=\W|$)", r"\1 or higher", line)
+    # `worker@8f31c2` — a build reference. The separator is spoken.
+    line = re.sub(r"(?<=[A-Za-z0-9])@(?=[A-Za-z0-9])", " at ", line)
     # A fill-in blank in a template sentence: "We chose this system because ___." The rules
     # above leave it alone (the italic rule needs non-underscore content between the markers,
     # the snake_case rule needs word characters on both sides), so it reached the voice, and
@@ -624,6 +669,17 @@ def main() -> int:
                 f"text — the voice will read it: ...{context}...",
                 file=sys.stderr,
             )
+
+    # Every all-caps token the voice will spell rather than read. Most are acronyms and spelling
+    # them is right; the ones that are English words are not, and they do real damage — a
+    # shouted RFC 2119 "MUST" took its neighbours with it and started a repetition loop. There
+    # is no way to tell the two apart from the token alone, so this reports them and lets the
+    # next book's audit decide, adding what it finds to PROSE_CAPS_AS_WORDS. That is much
+    # cheaper than the alternative, which is a listener finding it.
+    caps = sorted(set(re.findall(r"\b[A-Z]{3,}\b", out)) - PROSE_CAPS_AS_WORDS)
+    if caps and args.stats:
+        print(f"note: {args.input.name}: spelled out as letters — {', '.join(caps)}",
+              file=sys.stderr)
 
     # A single over-long sentence is spoken as one segment, and a segment the AR loop cannot
     # finish is silently cut short (see `tts_core::text::split_long`). The engine now splits
