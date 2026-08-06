@@ -30,7 +30,16 @@ says it should.
     ok        the span was simply missed by recognition; the audio is fine
     BABBLE    the audio does not say the words — synthesis failed, re-render is required
 
-`BABBLE` is an audio defect, not an alignment defect, and re-aligning will not fix it.
+`BABBLE` is usually an audio defect, not an alignment defect, and re-aligning will not fix it.
+Read the transcript before acting on it, though, because a low overlap has a second and
+entirely benign cause: recognition and the book tokenise the same sound differently, and the
+overlap is computed per word. Two spans in one book scored 0.60 and 0.06 on correct audio —
+a list of clock times, which recognition writes as `1001` where the text has `10` and `01`,
+and a list of identifiers, where `C-417, A-1` came back as the single token `C417A1`. The
+identifier list also transcribed `P622` for `P-602` on two independent seeds and `C4N17` on
+one of them, inventing a letter the text does not contain: when a reading reproduces across
+seeds, the audio differs each time and the recogniser does not, so the recogniser is the
+consistent one. A digit-heavy span is worth a second look before it is worth a re-render.
 
 Usage:
     verify-narration.py narration/*.opus
