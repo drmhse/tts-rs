@@ -3,11 +3,16 @@
 Text in, speech out, one process, bounded memory. 17819 lines of Rust across 10 crates,
 no ONNX and no Python at runtime.
 
+RTF is measured on `examples/senior.txt` unless noted; `qwen3tts` is quoted on a 100-segment
+chapter with `--quant f16`, where batching applies. Params are counted from the safetensors
+headers, so `qwen3tts` reads 2.10 B rather than the 1.7 B in its name, which counts only the
+language backbone.
+
 | engine | model | params | state | RTF | gate |
 |---|---|---|---|---|---|
 | `audio8` | Audio8-TTS-Preview-0.6b, 44.1 kHz | 601 M | ready | **0.499** | 8 checks, greedy generation bit-identical |
 | `cosyvoice` | Fun-CosyVoice3-0.5B, 24 kHz | 995 M | ready | **0.697** | 27 checks, teacher-forced ids 105/105 |
-| `qwen3tts` | Qwen3-TTS-12Hz-1.7B-Base, 24 kHz | 1.7 B | ready | **0.863** | 63 checks, argmax code 0 identical, predictor 15/15 |
+| `qwen3tts` | Qwen3-TTS-12Hz-1.7B-Base, 24 kHz | 2.10 B | ready | **0.253** | 65 checks, argmax code 0 identical, predictor 15/15 |
 
 ```
 ./scripts/gates.sh                                 # everything below, in order
