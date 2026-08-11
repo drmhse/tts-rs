@@ -182,6 +182,207 @@ impl candle_core::CustomOp2 for SnakeAlpha {
     }
 }
 
+/// `x + beta_recip[c] * sin^2(alpha[c] * x)` for `[1, C, L]` inputs.
+struct SnakeBeta {
+    channels: usize,
+    len: usize,
+}
+
+impl candle_core::CustomOp3 for SnakeBeta {
+    fn name(&self) -> &'static str {
+        "snake_beta"
+    }
+
+    fn cpu_fwd(
+        &self,
+        s1: &CpuStorage,
+        l1: &Layout,
+        s2: &CpuStorage,
+        l2: &Layout,
+        s3: &CpuStorage,
+        l3: &Layout,
+    ) -> Result<(CpuStorage, Shape)> {
+        let (x, a, br) = match (s1, s2, s3) {
+            (CpuStorage::F32(x), CpuStorage::F32(a), CpuStorage::F32(br)) => (x, a, br),
+            _ => candle_core::bail!("snake_beta: only f32"),
+        };
+        for l in [l1, l2, l3] {
+            if !l.is_contiguous() {
+                candle_core::bail!("snake_beta: inputs must be contiguous");
+            }
+        }
+        let (o1, o2, o3) = (l1.start_offset(), l2.start_offset(), l3.start_offset());
+        let mut dst = vec![0f32; self.channels * self.len];
+        for c in 0..self.channels {
+            let (alpha, brecip) = (a[o2 + c], br[o3 + c]);
+            for l in 0..self.len {
+                let x = x[o1 + c * self.len + l];
+                dst[c * self.len + l] = x + brecip * (alpha * x).sin().powi(2);
+            }
+        }
+        Ok((CpuStorage::F32(dst), (1, self.channels, self.len).into()))
+    }
+
+    #[cfg(feature = "metal")]
+    fn metal_fwd(
+        &self,
+        s1: &candle_core::MetalStorage,
+        l1: &Layout,
+        s2: &candle_core::MetalStorage,
+        l2: &Layout,
+        s3: &candle_core::MetalStorage,
+        l3: &Layout,
+    ) -> Result<(candle_core::MetalStorage, Shape)> {
+        use candle_core::backend::BackendStorage;
+        use candle_core::{DType, MetalStorage};
+        use objc2_metal::{MTLResourceUsage, MTLSize};
+
+        for l in [l1, l2, l3] {
+            if !l.is_contiguous() {
+                candle_core::bail!("snake_beta: inputs must be contiguous");
+            }
+        }
+        for s in [s1, s2, s3] {
+            if s.dtype() != DType::F32 {
+                candle_core::bail!("snake_beta: only f32");
+            }
+        }
+        let n = self.channels * self.len;
+        let device = s1.device();
+        let p = mtl::pipeline(device, "snake_beta_f32")?;
+        let dst = device.new_buffer(n, DType::F32, "snake_beta")?;
+
+        let encoder = device.command_encoder()?;
+        encoder.set_label("tts_nn::snake_beta");
+        encoder.set_compute_pipeline_state(&p);
+        for (i, (s, l)) in [(s1, l1), (s2, l2), (s3, l3)].iter().enumerate() {
+            encoder.set_buffer(i, Some(s.buffer()), l.start_offset() * 4);
+            encoder.use_resource(s.buffer(), MTLResourceUsage::Read);
+        }
+        encoder.set_buffer(3, Some(dst.as_ref()), 0);
+        encoder.set_bytes(4, &(self.len as u32));
+        encoder.use_resource(dst.as_ref(), MTLResourceUsage::Write);
+        let w = mtl::group_width(&p, self.len);
+        encoder.dispatch_threads(
+            MTLSize {
+                width: self.len,
+                height: self.channels,
+                depth: 1,
+            },
+            MTLSize {
+                width: w,
+                height: 1,
+                depth: 1,
+            },
+        );
+        drop(encoder);
+
+        Ok((
+            MetalStorage::new(dst, device.clone(), n, DType::F32),
+            (1, self.channels, self.len).into(),
+        ))
+    }
+}
+
+/// `silu(gate) * up`, elementwise over identically shaped inputs.
+struct SwigluMul {
+    n: usize,
+}
+
+impl candle_core::CustomOp2 for SwigluMul {
+    fn name(&self) -> &'static str {
+        "swiglu_mul"
+    }
+
+    fn cpu_fwd(
+        &self,
+        s1: &CpuStorage,
+        l1: &Layout,
+        s2: &CpuStorage,
+        l2: &Layout,
+    ) -> Result<(CpuStorage, Shape)> {
+        let (g, u) = match (s1, s2) {
+            (CpuStorage::F32(g), CpuStorage::F32(u)) => (g, u),
+            _ => candle_core::bail!("swiglu_mul: only f32"),
+        };
+        if !l1.is_contiguous() || !l2.is_contiguous() {
+            candle_core::bail!("swiglu_mul: inputs must be contiguous");
+        }
+        let (o1, o2) = (l1.start_offset(), l2.start_offset());
+        let dst = (0..self.n)
+            .map(|i| {
+                let x = g[o1 + i];
+                (x / (1.0 + (-x).exp())) * u[o2 + i]
+            })
+            .collect();
+        Ok((CpuStorage::F32(dst), l1.shape().clone()))
+    }
+
+    #[cfg(feature = "metal")]
+    fn metal_fwd(
+        &self,
+        s1: &candle_core::MetalStorage,
+        l1: &Layout,
+        s2: &candle_core::MetalStorage,
+        l2: &Layout,
+    ) -> Result<(candle_core::MetalStorage, Shape)> {
+        use candle_core::backend::BackendStorage;
+        use candle_core::{DType, MetalStorage};
+        use objc2_metal::{MTLResourceUsage, MTLSize};
+
+        if !l1.is_contiguous() || !l2.is_contiguous() {
+            candle_core::bail!("swiglu_mul: inputs must be contiguous");
+        }
+        if s1.dtype() != DType::F32 || s2.dtype() != DType::F32 {
+            candle_core::bail!("swiglu_mul: only f32");
+        }
+        let device = s1.device();
+        let p = mtl::pipeline(device, "swiglu_mul_f32")?;
+        let dst = device.new_buffer(self.n, DType::F32, "swiglu_mul")?;
+
+        let encoder = device.command_encoder()?;
+        encoder.set_label("tts_nn::swiglu_mul");
+        encoder.set_compute_pipeline_state(&p);
+        encoder.set_buffer(0, Some(s1.buffer()), l1.start_offset() * 4);
+        encoder.set_buffer(1, Some(s2.buffer()), l2.start_offset() * 4);
+        encoder.set_buffer(2, Some(dst.as_ref()), 0);
+        encoder.set_bytes(3, &(self.n as u32));
+        encoder.use_resource(s1.buffer(), MTLResourceUsage::Read);
+        encoder.use_resource(s2.buffer(), MTLResourceUsage::Read);
+        encoder.use_resource(dst.as_ref(), MTLResourceUsage::Write);
+        let w = mtl::group_width(&p, self.n);
+        encoder.dispatch_threads(
+            MTLSize {
+                width: self.n,
+                height: 1,
+                depth: 1,
+            },
+            MTLSize {
+                width: w,
+                height: 1,
+                depth: 1,
+            },
+        );
+        drop(encoder);
+
+        Ok((
+            MetalStorage::new(dst, device.clone(), self.n, DType::F32),
+            l1.shape().clone(),
+        ))
+    }
+}
+
+/// `silu(gate) * up` in one pass — the tail of a SwiGLU feed-forward.
+pub fn swiglu_mul(gate: &Tensor, up: &Tensor) -> Result<Tensor> {
+    if gate.device().is_metal() && gate.shape() == up.shape() {
+        let op = SwigluMul {
+            n: gate.elem_count(),
+        };
+        return gate.contiguous()?.apply_op2_no_bwd(&up.contiguous()?, &op);
+    }
+    candle_nn::ops::silu(gate)? * up
+}
+
 /// `[b, n, h, d] -> [b, h, n, d]` as one coalesced pass.
 struct HeadTranspose {
     n: usize,
@@ -318,6 +519,164 @@ pub fn snake_alpha(x: &Tensor, alpha: &Tensor) -> Result<Tensor> {
     }
     let u = x.broadcast_mul(&alpha.reshape((1, c, 1))?)?.contiguous()?;
     &u + u.sin()?.sqr()?
+}
+
+/// [`snake_beta`] for channels-last `[b, L, C]`.
+pub fn snake_beta_nlc(x: &Tensor, alpha: &Tensor, beta_recip: &Tensor) -> Result<Tensor> {
+    let dims = x.dims();
+    let c = dims[dims.len() - 1];
+    let rows: usize = dims[..dims.len() - 1].iter().product();
+    // Not gated on Metal, unlike the channel-major sibling: `cpu_fwd` handles f16 activations
+    // against f32 parameters and the composed fallback cannot, since candle has no mixed-dtype
+    // multiply. The gate runs its numerics on CPU, so the fallback is a real path, not a
+    // formality.
+    if alpha.elem_count() == c && beta_recip.elem_count() == c {
+        let op = SnakeBetaNlc {
+            rows,
+            chan: c,
+            half: x.dtype() == candle_core::DType::F16,
+        };
+        return x
+            .contiguous()?
+            .apply_op3_no_bwd(
+                &alpha.flatten_all()?.contiguous()?,
+                &beta_recip.flatten_all()?.contiguous()?,
+                &op,
+            )?
+            .reshape(dims);
+    }
+    let u = x.broadcast_mul(alpha)?.contiguous()?;
+    x.broadcast_add(&u.sin()?.sqr()?.broadcast_mul(beta_recip)?)
+}
+
+struct SnakeBetaNlc {
+    rows: usize,
+    chan: usize,
+    half: bool,
+}
+
+impl candle_core::CustomOp3 for SnakeBetaNlc {
+    fn name(&self) -> &'static str {
+        "snake_beta_nlc"
+    }
+
+    fn cpu_fwd(
+        &self,
+        s1: &CpuStorage,
+        l1: &Layout,
+        s2: &CpuStorage,
+        l2: &Layout,
+        s3: &CpuStorage,
+        l3: &Layout,
+    ) -> Result<(CpuStorage, Shape)> {
+        let xf: Vec<f32>;
+        let (x, a, br) = match (s1, s2, s3) {
+            (CpuStorage::F32(x), CpuStorage::F32(a), CpuStorage::F32(br)) => (&x[..], a, br),
+            (CpuStorage::F16(x), CpuStorage::F32(a), CpuStorage::F32(br)) => {
+                xf = x.iter().map(|v| v.to_f32()).collect();
+                (&xf[..], a, br)
+            }
+            _ => candle_core::bail!("snake_beta_nlc: activations f32 or f16, params f32"),
+        };
+        let (o1, o2, o3) = (l1.start_offset(), l2.start_offset(), l3.start_offset());
+        let n = self.rows * self.chan;
+        let mut dst = vec![0f32; n];
+        for r in 0..self.rows {
+            for c in 0..self.chan {
+                let i = r * self.chan + c;
+                let v = x[o1 + i];
+                dst[i] = v + br[o3 + c] * (a[o2 + c] * v).sin().powi(2);
+            }
+        }
+        let shape: candle_core::Shape = (self.rows, self.chan).into();
+        if self.half {
+            let h = dst.into_iter().map(half::f16::from_f32).collect();
+            Ok((CpuStorage::F16(h), shape))
+        } else {
+            Ok((CpuStorage::F32(dst), shape))
+        }
+    }
+
+    #[cfg(feature = "metal")]
+    fn metal_fwd(
+        &self,
+        s1: &candle_core::MetalStorage,
+        l1: &Layout,
+        s2: &candle_core::MetalStorage,
+        l2: &Layout,
+        s3: &candle_core::MetalStorage,
+        l3: &Layout,
+    ) -> Result<(candle_core::MetalStorage, Shape)> {
+        use candle_core::backend::BackendStorage;
+        use candle_core::{DType, MetalStorage};
+        use objc2_metal::{MTLResourceUsage, MTLSize};
+
+        if s2.dtype() != DType::F32 || s3.dtype() != DType::F32 {
+            candle_core::bail!("snake_beta_nlc: parameters must be f32");
+        }
+        let (kernel, dt, esz) = match s1.dtype() {
+            DType::F32 => ("snake_beta_nlc_f32", DType::F32, 4),
+            DType::F16 => ("snake_beta_nlc_f16", DType::F16, 2),
+            d => candle_core::bail!("snake_beta_nlc: activations f32 or f16, got {d:?}"),
+        };
+        let n = self.rows * self.chan;
+        let device = s1.device();
+        let p = mtl::pipeline(device, kernel)?;
+        let dst = device.new_buffer(n, dt, "snake_beta_nlc")?;
+
+        let encoder = device.command_encoder()?;
+        encoder.set_label("tts_nn::snake_beta_nlc");
+        encoder.set_compute_pipeline_state(&p);
+        encoder.set_buffer(0, Some(s1.buffer()), l1.start_offset() * esz);
+        encoder.set_buffer(1, Some(s2.buffer()), l2.start_offset() * 4);
+        encoder.set_buffer(2, Some(s3.buffer()), l3.start_offset() * 4);
+        for s in [s1, s2, s3] {
+            encoder.use_resource(s.buffer(), MTLResourceUsage::Read);
+        }
+        encoder.set_buffer(3, Some(dst.as_ref()), 0);
+        encoder.set_bytes(4, &(self.chan as u32));
+        encoder.use_resource(dst.as_ref(), MTLResourceUsage::Write);
+        encoder.dispatch_threads(
+            MTLSize {
+                width: self.chan,
+                height: self.rows,
+                depth: 1,
+            },
+            MTLSize {
+                width: mtl::group_width(&p, self.chan),
+                height: 1,
+                depth: 1,
+            },
+        );
+        drop(encoder);
+
+        Ok((
+            MetalStorage::new(dst, device.clone(), n, dt),
+            (self.rows, self.chan).into(),
+        ))
+    }
+}
+
+/// `x + beta_recip * sin^2(alpha * x)`, both parameters per-channel over `[1, C, L]`.
+///
+/// The unfoldable snake — see [`crate::snake_full`], which is the composed fallback and
+/// what the tests compare against.
+pub fn snake_beta(x: &Tensor, alpha: &Tensor, beta_recip: &Tensor) -> Result<Tensor> {
+    let (b, c, len) = x.dims3()?;
+    if b == 1 && x.device().is_metal() && alpha.elem_count() == c && beta_recip.elem_count() == c {
+        let op = SnakeBeta { channels: c, len };
+        return x.contiguous()?.apply_op3_no_bwd(
+            &alpha.flatten_all()?.contiguous()?,
+            &beta_recip.flatten_all()?.contiguous()?,
+            &op,
+        );
+    }
+    let u = x.broadcast_mul(&alpha.reshape((1, c, 1))?)?.contiguous()?;
+    x.broadcast_add(
+        &u.sin()?
+            .sqr()?
+            .broadcast_mul(&beta_recip.reshape((1, c, 1))?)?,
+    )
 }
 
 // ------------------------------------------------ DiT block elementwise
@@ -495,6 +854,42 @@ mod tests {
         let got = snake_alpha(&x, &alpha)?;
         assert_eq!(want.dims(), got.dims());
         assert!(crate::max_abs_diff(&want, &got)? < 1e-5);
+        Ok(())
+    }
+
+    /// `snake_beta` against `snake_full`, **on every device that is actually available**.
+    ///
+    /// The CPU arm alone would not be worth much: it exercises `cpu_fwd`, which is the
+    /// fallback, not the kernel that runs in production. Reverting device sampling cost a
+    /// day to a unit test that passed on a shape the real model never uses — the shapes
+    /// here are the codec's own (1536 channels, a chunk's worth of samples).
+    #[test]
+    fn snake_beta_matches_composed() -> anyhow::Result<()> {
+        let mut devices = vec![Device::Cpu];
+        #[cfg(feature = "metal")]
+        if let Ok(m) = Device::new_metal(0) {
+            devices.push(m);
+        }
+        for d in devices {
+            for (c, len) in [(7, 33), (1536, 601), (24, 4801)] {
+                let x = Tensor::randn(0f32, 2., (1, c, len), &d)?;
+                let alpha = Tensor::randn(0f32, 1., c, &d)?.exp()?;
+                let beta_recip = Tensor::randn(0f32, 1., c, &d)?.exp()?;
+
+                let want = crate::snake_full(
+                    &x,
+                    &alpha.reshape((1, c, 1))?,
+                    &beta_recip.reshape((1, c, 1))?,
+                )?;
+                let got = snake_beta(&x, &alpha, &beta_recip)?;
+                assert_eq!(want.dims(), got.dims(), "{d:?} at {c}x{len}");
+                let (abs, rel) = crate::abs_and_rel(&want, &got)?;
+                assert!(
+                    rel < 1e-5,
+                    "{d:?} at {c}x{len}: abs {abs:.3e} rel {rel:.3e}"
+                );
+            }
+        }
         Ok(())
     }
 }

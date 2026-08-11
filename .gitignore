@@ -45,3 +45,6 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# Narration run logs from scripts/narrate-*.sh.
+*.log

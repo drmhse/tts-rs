@@ -161,6 +161,191 @@ kernel void snake_alpha_f32(
     const float s = sin(u);
     dst[c * len + l] = u + s * s;
 }
+
+// ---- snake beta ---------------------------------------------------------------
+//
+// y = x + beta_recip[c] * sin^2(alpha[c] * x) — SnakeBeta, with a per-channel amplitude
+// as well as a per-channel frequency. Neither can be folded away: the input also feeds a
+// skip, and beta is independent of alpha. `snake_full` is six composed ops, so it pays six
+// round trips where this pays one.
+kernel void snake_beta_f32(
+    device const float *src    [[buffer(0)]],
+    device const float *alpha  [[buffer(1)]],
+    device const float *brecip [[buffer(2)]],
+    device float       *dst    [[buffer(3)]],
+    constant uint      &len    [[buffer(4)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    const uint l = gid.x;
+    if (l >= len) { return; }
+    const uint c = gid.y;
+
+    const uint i = c * len + l;
+    const float x = src[i];
+    const float s = sin(alpha[c] * x);
+    dst[i] = x + brecip[c] * s * s;
+}
+
+// ---- decode attention ----------------------------------------------------------
+//
+// Both read the KV cache in place, indexing with `capacity` as the row stride, which is what
+// candle cannot do: `narrow(2, 0, span)` of the cache is non-contiguous, so it copies the span
+// twice per layer per step.
+
+// scores[bh, g, p] = dot(q[bh, g, :], k[bh, p, :]), masked outside [window_start, span).
+kernel void decode_scores_f32(
+    device const float *q     [[buffer(0)]],
+    device const float *k     [[buffer(1)]],
+    device float       *dst   [[buffer(2)]],
+    constant uint      &span  [[buffer(3)]],
+    constant uint      &cap   [[buffer(4)]],
+    constant uint      &hd    [[buffer(5)]],
+    constant uint      &gqa   [[buffer(6)]],
+    constant uint      &wstart [[buffer(7)]],
+    uint3 gid [[thread_position_in_grid]])
+{
+    const uint p = gid.x;
+    if (p >= span) { return; }
+    const uint g  = gid.y;
+    const uint bh = gid.z;
+
+    const uint o = (bh * gqa + g) * span + p;
+    if (p < wstart) { dst[o] = -INFINITY; return; }
+
+    const device float *qr = q + (bh * gqa + g) * hd;
+    const device float *kr = k + (bh * cap + p) * hd;
+    float acc = 0.0f;
+    for (uint d = 0; d < hd; ++d) { acc += qr[d] * kr[d]; }
+    dst[o] = acc;
+}
+
+// out[bh, g, d] = sum_p probs[bh, g, p] * v[bh, p, d].
+//
+// `d` is the grid's fast axis, so consecutive threads read consecutive `v` — coalesced.
+kernel void decode_weighted_f32(
+    device const float *probs [[buffer(0)]],
+    device const float *v     [[buffer(1)]],
+    device float       *dst   [[buffer(2)]],
+    constant uint      &span  [[buffer(3)]],
+    constant uint      &cap   [[buffer(4)]],
+    constant uint      &hd    [[buffer(5)]],
+    constant uint      &gqa   [[buffer(6)]],
+    uint3 gid [[thread_position_in_grid]])
+{
+    const uint d = gid.x;
+    if (d >= hd) { return; }
+    const uint g  = gid.y;
+    const uint bh = gid.z;
+
+    const device float *pr = probs + (bh * gqa + g) * span;
+    const device float *vc = v + bh * cap * hd + d;
+    float acc = 0.0f;
+    for (uint p = 0; p < span; ++p) { acc += pr[p] * vc[p * hd]; }
+    dst[(bh * gqa + g) * hd + d] = acc;
+}
+
+// f16 cache variants: half the bytes on the hot read, accumulated in float either way.
+kernel void decode_scores_f16(
+    device const float *q     [[buffer(0)]],
+    device const half  *k     [[buffer(1)]],
+    device float       *dst   [[buffer(2)]],
+    constant uint      &span  [[buffer(3)]],
+    constant uint      &cap   [[buffer(4)]],
+    constant uint      &hd    [[buffer(5)]],
+    constant uint      &gqa   [[buffer(6)]],
+    constant uint      &wstart [[buffer(7)]],
+    uint3 gid [[thread_position_in_grid]])
+{
+    const uint p = gid.x;
+    if (p >= span) { return; }
+    const uint g  = gid.y;
+    const uint bh = gid.z;
+
+    const uint o = (bh * gqa + g) * span + p;
+    if (p < wstart) { dst[o] = -INFINITY; return; }
+
+    const device float *qr = q + (bh * gqa + g) * hd;
+    const device half  *kr = k + (bh * cap + p) * hd;
+    float acc = 0.0f;
+    for (uint d = 0; d < hd; ++d) { acc += qr[d] * (float)kr[d]; }
+    dst[o] = acc;
+}
+
+kernel void decode_weighted_f16(
+    device const float *probs [[buffer(0)]],
+    device const half  *v     [[buffer(1)]],
+    device float       *dst   [[buffer(2)]],
+    constant uint      &span  [[buffer(3)]],
+    constant uint      &cap   [[buffer(4)]],
+    constant uint      &hd    [[buffer(5)]],
+    constant uint      &gqa   [[buffer(6)]],
+    uint3 gid [[thread_position_in_grid]])
+{
+    const uint d = gid.x;
+    if (d >= hd) { return; }
+    const uint g  = gid.y;
+    const uint bh = gid.z;
+
+    const device float *pr = probs + (bh * gqa + g) * span;
+    const device half  *vc = v + bh * cap * hd + d;
+    float acc = 0.0f;
+    for (uint p = 0; p < span; ++p) { acc += pr[p] * (float)vc[p * hd]; }
+    dst[(bh * gqa + g) * hd + d] = acc;
+}
+
+// Channels-last SnakeBeta: C is the grid's fast axis, so the parameter lookup is a broadcast
+// within a threadgroup and both the read and the write coalesce.
+kernel void snake_beta_nlc_f32(
+    device const float *src    [[buffer(0)]],
+    device const float *alpha  [[buffer(1)]],
+    device const float *brecip [[buffer(2)]],
+    device float       *dst    [[buffer(3)]],
+    constant uint      &chan   [[buffer(4)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    const uint c = gid.x;
+    if (c >= chan) { return; }
+    const uint i = gid.y * chan + c;
+    const float x = src[i];
+    const float s = sin(alpha[c] * x);
+    dst[i] = x + brecip[c] * s * s;
+}
+
+// f16 activations, f32 parameters and math: the sin and the square want the wider type, the
+// tensor crossing memory does not.
+kernel void snake_beta_nlc_f16(
+    device const half  *src    [[buffer(0)]],
+    device const float *alpha  [[buffer(1)]],
+    device const float *brecip [[buffer(2)]],
+    device half        *dst    [[buffer(3)]],
+    constant uint      &chan   [[buffer(4)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    const uint c = gid.x;
+    if (c >= chan) { return; }
+    const uint i = gid.y * chan + c;
+    const float x = (float)src[i];
+    const float s = sin(alpha[c] * x);
+    dst[i] = (half)(x + brecip[c] * s * s);
+}
+
+// ---- swiglu tail ---------------------------------------------------------------
+//
+// out = silu(g) * u, elementwise. candle spends two dispatches and two full round trips on
+// this. That is nothing on a long sequence, but a batch-1 decode step is dispatch-bound: the
+// qwen3 predictor runs it 70 times per audio frame, where the cost is the launch and not
+// the 3072 lanes of arithmetic.
+kernel void swiglu_mul_f32(
+    device const float *g   [[buffer(0)]],
+    device const float *u   [[buffer(1)]],
+    device float       *dst [[buffer(2)]],
+    constant uint      &n   [[buffer(3)]],
+    uint gid [[thread_position_in_grid]])
+{
+    if (gid >= n) { return; }
+    const float x = g[gid];
+    dst[gid] = (x / (1.0f + exp(-x))) * u[gid];
+}
 "#;
 
 /// Compile the library once per device and hand out cached pipelines by function name.

@@ -25,9 +25,11 @@
 //!   original1}` at load time. Both engines' vocoders ship weight-normalised convs and
 //!   neither needs the parametrisation at inference.
 
+pub mod attn;
 pub mod fused;
 pub mod im2col;
 pub(crate) mod mtl;
+pub mod nlc;
 
 use anyhow::{Context, Result};
 use candle_core::quantized::{GgmlDType, QMatMul, QTensor};
@@ -149,7 +151,43 @@ pub enum Proj {
     /// per-call transpose. Transposing inside `forward` re-materialises the matrix on
     /// every call, which for the AR loop's head was 14.7 MB per token.
     Dense(Tensor),
+    /// `[in, out]` in f16, multiplied against activations cast down per call.
+    ///
+    /// Half the bytes of `Dense` and, unlike `Quant`, a *real* GEMM — so its weight read
+    /// amortises across a batch. That combination is the only one that makes batched decode
+    /// pay on this backend: see `docs/performance/qwen3tts-batching.md`. The cast of `x` is
+    /// free by comparison, being one row per lane against a whole weight matrix.
+    Half(Tensor),
     Quant(QMatMul),
+}
+
+/// How to hold a projection's weights.
+///
+/// Not `Option<GgmlDType>` any more, because f16 is neither dense-f32 nor block-quantized and
+/// the choice between them is a speed/memory trade with no single winner: at batch 1 q8_0 is
+/// fastest, batched f16 is, and f32 is for fixtures.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Weight {
+    F32,
+    F16,
+    Quant(GgmlDType),
+}
+
+impl Weight {
+    /// Whether a batched call amortises this format's weight read. True for the two dense
+    /// formats; false for quantized, whose Metal `mm_t` kernel re-reads per row.
+    pub fn batches(&self) -> bool {
+        !matches!(self, Weight::Quant(_))
+    }
+}
+
+impl From<Option<GgmlDType>> for Weight {
+    fn from(q: Option<GgmlDType>) -> Self {
+        match q {
+            None => Weight::F32,
+            Some(q) => Weight::Quant(q),
+        }
+    }
 }
 
 /// `x @ w_t` with `x` of any leading shape, as a single two-dimensional GEMM.
@@ -181,9 +219,20 @@ impl Proj {
         quant: Option<GgmlDType>,
         device: &Device,
     ) -> Result<Self> {
-        match quant {
-            None => Ok(Proj::Dense(w.get(name)?.t()?.contiguous()?)),
-            Some(q) => {
+        Self::load_as(w, name, quant.into(), device)
+    }
+
+    /// `name` is the `[out, in]` weight.
+    pub fn load_as(w: &Weights, name: &str, how: Weight, device: &Device) -> Result<Self> {
+        match how {
+            Weight::F32 => Ok(Proj::Dense(w.get(name)?.t()?.contiguous()?)),
+            // Straight from the checkpoint's dtype. Going via f32 would double the transient
+            // footprint, and candle's Metal buffer pool has no public way to release anything —
+            // an f32 intermediate per projection stays resident for the life of the process.
+            Weight::F16 => Ok(Proj::Half(
+                w.raw(name)?.to_dtype(DType::F16)?.t()?.contiguous()?,
+            )),
+            Weight::Quant(q) => {
                 // `quantize_onto` needs a CPU f32 source and writes the blocks straight
                 // to the device.
                 let cpu = w.raw(name)?.to_dtype(DType::F32)?.to_device(&Device::Cpu)?;
@@ -196,9 +245,14 @@ impl Proj {
 
     /// Quantize an already-loaded `[out, in]` tensor, or keep it dense.
     pub fn from_tensor(t: &Tensor, quant: Option<GgmlDType>, device: &Device) -> Result<Self> {
-        match quant {
-            None => Ok(Proj::Dense(t.t()?.contiguous()?)),
-            Some(q) => {
+        Self::from_tensor_as(t, quant.into(), device)
+    }
+
+    pub fn from_tensor_as(t: &Tensor, how: Weight, device: &Device) -> Result<Self> {
+        match how {
+            Weight::F32 => Ok(Proj::Dense(t.t()?.contiguous()?)),
+            Weight::F16 => Ok(Proj::Half(t.to_dtype(DType::F16)?.t()?.contiguous()?)),
+            Weight::Quant(q) => {
                 let cpu = t.to_dtype(DType::F32)?.to_device(&Device::Cpu)?;
                 Ok(Proj::Quant(QMatMul::from_qtensor(QTensor::quantize_onto(
                     &cpu, q, device,
@@ -207,10 +261,11 @@ impl Proj {
         }
     }
 
-    /// `[.., in] -> [.., out]`.
+    /// `[.., in] -> [.., out]`. Always f32 in and out, whatever the weight holds.
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         Ok(match self {
             Proj::Dense(w_t) => matmul_2d(x, w_t)?,
+            Proj::Half(w_t) => matmul_2d(&x.to_dtype(DType::F16)?, w_t)?.to_dtype(x.dtype())?,
             Proj::Quant(q) => q.forward(x)?,
         })
     }
@@ -392,7 +447,7 @@ pub fn causal_conv1d_gemm(
     dilation: usize,
 ) -> Result<Tensor> {
     let (_, cin, len) = x.dims3()?;
-    let cols_per_chunk = (GEMM_COL_BUDGET / (k * cin)).max(1);
+    let cols_per_chunk = (gemm_col_budget() / (k * cin)).max(1);
     if cols_per_chunk < len {
         let pad = (k - 1) * dilation;
         let mut pieces = Vec::new();
@@ -416,7 +471,16 @@ pub fn causal_conv1d_gemm(
 /// small enough that the pool holds a handful of buffers rather than one per segment
 /// length, and large enough that the GEMM shape stays good. `GEMM_COL_BUDGET` is the one
 /// knob that trades the codec's speed against peak footprint.
-const GEMM_COL_BUDGET: usize = 64 << 20;
+fn gemm_col_budget() -> usize {
+    static B: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *B.get_or_init(|| {
+        std::env::var("TTS_GEMM_COL_BUDGET")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .map(|m: usize| m << 20)
+            .unwrap_or(64 << 20)
+    })
+}
 
 fn conv1d_gemm_whole(
     x: &Tensor,

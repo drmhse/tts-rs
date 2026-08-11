@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+half = "2"
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
 anyhow = { workspace = true }
