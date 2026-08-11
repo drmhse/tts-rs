@@ -36,6 +36,7 @@ cd "$(dirname "$0")/.."
 BOOK=""
 OUT=narration
 ENGINE=cosyvoice
+QUANT=""
 FILES=()
 PORT="${NARRATE_PORT:-3099}"
 KEY="${TTS_API_KEY:-narrate-local-key}"
@@ -50,6 +51,7 @@ ONLY=""
 # dropped the clause after it. Neither is detectable from token counts; both are obvious to
 # the ASR check in verify-narration.py, and both clear on a different draw.
 SEED="${NARRATE_SEED:-}"
+LIST=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -60,6 +62,7 @@ while [ $# -gt 0 ]; do
     --align-python) ALIGN_PYTHON="$2"; shift 2 ;;
     --only) ONLY="$2"; shift 2 ;;
     --seed) SEED="$2"; shift 2 ;;
+    --list) LIST=1; shift ;;
     -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
     *) FILES+=("$1"); shift ;;
   esac
@@ -102,11 +105,23 @@ if [ -n "$ONLY" ]; then
   [ ${#FILES[@]} -gt 0 ] || die "--only $ONLY matched nothing"
 fi
 
+# Discovery only, for callers that want to plan before committing to a render.
+if [ "$LIST" = 1 ]; then
+  for src in "${FILES[@]}"; do printf '%s\t%s\n' "$(out_name "$src")" "$src"; done
+  exit 0
+fi
+
 case "$ENGINE" in
   audio8)    VOICE=voices/cosy-default ;;
   cosyvoice) VOICE=voices/cosy-default-cosyvoice ;;
+  qwen3tts)  VOICE=voices/cosy-default-qwen3tts; QUANT="${NARRATE_QUANT:-f16}" ;;
   *) die "unknown engine '$ENGINE'" ;;
 esac
+# `f16` for qwen3tts, not its `q8_0` default. Both transformers are bandwidth-bound on weight
+# reads, and only a dense GEMM shares one read across a batch of segments: f16 batches 7.4x per
+# lane where q8_0 batches 1.1x. A chapter is hundreds of segments, so it always batches — RTF
+# 0.31 against 0.66. The trade is single-sentence latency, which a book does not have.
+# docs/performance/qwen3tts-batching.md has the numbers.
 command -v ffmpeg >/dev/null || die "ffmpeg not found"
 [ -x ./target/release/tts-serve ] || die "build first: cargo build --release"
 mkdir -p "$OUT"
@@ -143,6 +158,7 @@ if [ "$NEED_SERVER" = 1 ]; then
   say "Starting $ENGINE on :$PORT — loads once for all ${#FILES[@]} file(s)"
   TTS_API_KEY="$KEY" ./target/release/tts-serve \
     --port "$PORT" --engine "$ENGINE" --voice "$VOICE" --max-chars "$MAX_CHARS" \
+    ${QUANT:+--quant "$QUANT"} \
     >"$OUT/.server.log" 2>&1 &
   SERVER=$!
   trap 'kill $SERVER 2>/dev/null; wait $SERVER 2>/dev/null' EXIT
@@ -156,14 +172,44 @@ else
   say "Nothing to synthesise; re-encoding and re-aligning only"
 fi
 
-ok=0; failed=0; skipped=0; flagged=()
+# Progress and ETA. Words are counted from the markdown up front because the narration text
+# does not exist yet for un-rendered chapters; the ratio between them is stable enough for an
+# estimate. The rate is *measured as the run goes* rather than assumed, so the estimate
+# self-corrects and does not depend on which engine or weight format is in use.
+total_words=0; declare -a CH_WORDS=()
 for src in "${FILES[@]}"; do
+  w=$(wc -w < "$src" | tr -d ' ')
+  CH_WORDS+=("$w"); total_words=$((total_words + w))
+done
+say "$( printf '%d chapter(s), %s words' "${#FILES[@]}" "$(printf "%'d" "$total_words" 2>/dev/null || echo "$total_words")" )"
+run_start=$(date +%s)
+done_words=0
+
+fmt_hms() { printf '%d:%02d:%02d' $(($1/3600)) $((($1%3600)/60)) $(($1%60)); }
+
+ok=0; failed=0; skipped=0; flagged=()
+idx=0
+for src in "${FILES[@]}"; do
+  idx=$((idx+1))
   base=$(out_name "$src")
   wav="$OUT/$base.wav"; webm="$OUT/$base.webm"
   txt="$OUT/$base.txt"; map="$OUT/$base.map.json"; man="$OUT/$base.manifest.json"
 
-  if [ -s "$man" ]; then say "$base — done already"; skipped=$((skipped+1)); continue; fi
-  say "$base  ($(basename "$src"))"
+  ch_words=${CH_WORDS[$((idx-1))]}
+  if [ -s "$man" ]; then
+    say "[$idx/${#FILES[@]}] $base — done already"
+    skipped=$((skipped+1)); done_words=$((done_words + ch_words)); continue
+  fi
+  # Rate from work already done this run; before the first chapter finishes there is nothing
+  # measured, so no estimate is shown rather than a guessed one.
+  eta=""
+  if [ "$done_words" -gt 0 ]; then
+    elapsed=$(( $(date +%s) - run_start ))
+    remaining=$(( total_words - done_words ))
+    secs=$(python3 -c "print(int($elapsed / max($done_words,1) * $remaining))" 2>/dev/null || echo 0)
+    eta="  eta $(fmt_hms "$secs") for $remaining more words"
+  fi
+  say "[$idx/${#FILES[@]}] $base  ($(basename "$src"))$eta"
 
   # Regenerating the text is safe only when there is no audio yet. Deleting a manifest to force
   # a re-align would otherwise re-derive the text with whatever the converter does *today* and
@@ -226,9 +272,10 @@ for src in "${FILES[@]}"; do
     fi
   fi
   ok=$((ok+1))
+  done_words=$((done_words + ch_words))
 done
 
-say "Done: $ok narrated, $skipped already present, $failed failed"
+say "Done: $ok narrated, $skipped already present, $failed failed in $(fmt_hms $(( $(date +%s) - run_start )))"
 if [ ${#flagged[@]} -gt 0 ]; then
   printf '\033[33mquality gates failed:\033[0m %s\n' "${flagged[*]}" >&2
   printf 'Run scripts/verify-narration.py on these to see whether the audio or only the\n'

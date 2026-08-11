@@ -43,8 +43,17 @@ use anyhow::Result;
 use tts_core::{Capabilities, Engine, EngineConfig};
 
 /// Every engine known to this build, in preference order.
+///
+/// Order is preference, and [`default_id`] takes the first *available* entry — so an
+/// unfinished engine may sit anywhere without becoming the default. `qwen3tts` is last
+/// for a reason that will outlast its port: it supports ten languages and the list is
+/// closed, so it cannot be the fallback for a caller that did not choose it.
 pub fn catalogue() -> Vec<Capabilities> {
-    vec![audio8::engine::capabilities(), cosyvoice::capabilities()]
+    vec![
+        audio8::engine::capabilities(),
+        cosyvoice::capabilities(),
+        qwen3tts::capabilities(),
+    ]
 }
 
 /// Ids a caller may pass to [`load`].
@@ -66,6 +75,7 @@ pub fn load(id: &str, config: &EngineConfig) -> Result<Box<dyn Engine>> {
     match id {
         audio8::engine::ID => Ok(Box::new(audio8::engine::Audio8Engine::load(config)?)),
         cosyvoice::ID => Ok(Box::new(cosyvoice::CosyVoiceEngine::load(config)?)),
+        qwen3tts::ID => Ok(Box::new(qwen3tts::Qwen3TtsEngine::load(config)?)),
         other => anyhow::bail!("unknown engine `{other}`; available: {}", ids().join(", ")),
     }
 }
@@ -76,6 +86,7 @@ pub fn default_root(id: &str) -> &'static str {
     match id {
         audio8::engine::ID => "references/audio8/weights",
         cosyvoice::ID => "references/cosyvoice/weights",
+        qwen3tts::ID => "references/qwen3tts/weights",
         _ => ".",
     }
 }

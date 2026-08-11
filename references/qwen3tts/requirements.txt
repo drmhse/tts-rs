@@ -1,0 +1,13 @@
+# Reference side only — fixtures and voice assets, never runtime.
+#
+# Upstream is pip-installable, so no PYTHONPATH dance. Pin the revision: fixtures are ground
+# truth from one revision of the reference.
+qwen-tts @ git+https://github.com/QwenLM/Qwen3-TTS.git@main
+
+# Fixtures are fp32 CPU, so CPU torch is enough.
+torch>=2.4
+transformers>=4.57.3
+safetensors>=0.4
+soundfile
+numpy
+librosa

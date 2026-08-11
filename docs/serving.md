@@ -118,7 +118,7 @@ Real streaming needs the flow decoder to run on chunks with a carried cache; see
 out. One command from source to publishable:
 
 ```sh
-scripts/narrate-book.sh --book path/to/document --out narration --engine cosyvoice
+scripts/narrate-book.sh --book path/to/document --out narration --engine qwen3tts
 ```
 
 It loads the engine **once** for the whole run, refuses to start when another `tts` process
@@ -146,6 +146,39 @@ Per section:
 
 `scripts/narrate.sh` is the older single-stage entry point and is kept only for one-off
 renders; it has none of the resumability or verification below.
+
+### Which engine for a book
+
+`--engine` takes any registered id; the script maps each to its voice asset and, for
+`qwen3tts`, to the weight format that suits book-length work.
+
+| engine | voice asset | rate | RTF on a chapter |
+|---|---|---|---|
+| `qwen3tts` | `voices/cosy-default-qwen3tts` | 24 kHz | **0.31** |
+| `cosyvoice` | `voices/cosy-default-cosyvoice` | 24 kHz | 0.71 |
+| `audio8` | `voices/cosy-default` | 44.1 kHz | see `docs/status.md` |
+
+Measured on an 11-minute chapter (1612 words, 100 segments): **686.7 s of audio in 214 s.**
+
+**`qwen3tts` is chosen with `f16` weights here, not its own `q8_0` default**, and that is the
+single most important flag in this path. Both of its transformers are bandwidth-bound on weight
+reads, and only a *dense* GEMM shares one read across a batch of segments — candle's quantized
+kernel re-reads per row, batching 1.1x against f16's 7.4x. So:
+
+| | one sentence | a chapter |
+|---|---|---|
+| `q8_0` | **0.79** | 0.66 |
+| `f16` | 1.53 | **0.31** |
+
+A book is all right-hand column. Override with `NARRATE_QUANT=q8_0` if you ever want the other
+trade. For a *single short request* over `POST /tts`, start the server without `--quant` and take
+the q8_0 default instead.
+
+Memory is the ceiling to watch rather than speed: that chapter peaked at **11.1 GB** of footprint
+on a 16 GB machine (4.6 GB resident, zero swaps). candle's Metal buffer pool has no public way to
+release, so every allocation size that is ever live stays resident. It completed cleanly, but a
+second engine alongside it will not fit — which is why the script refuses to start when another
+`tts` process holds the GPU.
 
 ### Resume per stage, not per section
 

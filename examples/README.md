@@ -59,6 +59,36 @@ The Audio8 sampler bisection — 168 s of noise traced to `_sample` drawing its 
 at `dtype=probabilities.dtype`, so bfloat16 gives ~256 distinct values and the ratio ordering
 collapses. See `../../docs/status.md`.
 
+## Qwen3-TTS — 24 kHz
+
+| file | produced by | |
+|---|---|---|
+| `senior_qwen3tts.wav` | Rust, q8_0, cloning CosyVoice's default voice | 50.66 s, 43.7 s wall → **RTF 0.863** (talker 0.695, codec 0.168) |
+
+Regenerate:
+
+```sh
+cargo run -p tts-cli --release -- speak --engine qwen3tts \
+    --voice voices/cosy-default-qwen3tts --text-file examples/senior.txt \
+    --out examples/senior_qwen3tts.wav
+```
+
+All three engines land within 4.6 s of each other on this passage (50.27 / 54.86 / 50.66 s),
+which is the cheapest available check that none of them is truncating or rambling.
+
+A PyTorch control needs the reference venv and is slow (CPU only, RTF ~4.8):
+
+```sh
+references/qwen3tts/.venv/bin/python references/qwen3tts/reference_render.py \
+    --model references/qwen3tts/weights --audio ../CosyVoice/asset/default_voice.wav \
+    --ref-text "<the clip's transcript, verbatim>" \
+    --text "Hello from Rust." --out /tmp/ref.wav
+```
+
+**The transcript must match the clip.** Pairing that clip's transcript with a 4.72 s excerpt of
+it made the port emit 197 frames for a one-sentence input and the PyTorch reference run to its
+full 2048-frame cap. See `docs/porting/qwen3tts.md`.
+
 ## Reproducing
 
 From the repo root, the Rust renders in one command:

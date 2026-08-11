@@ -6,7 +6,8 @@ Three levels, each useful on its own. Stop at whichever one you need.
 |---|---|---|
 | [1. Run Audio8](#1-run-audio8) | `tts speak --engine audio8` | Rust, python ≥ 3.10, ~4 GB disk |
 | [2. Run CosyVoice](#2-run-cosyvoice) | `tts speak --engine cosyvoice` | the upstream CosyVoice repo, ~4 GB more |
-| [3. Regenerate the fixtures](#3-regenerate-the-fixtures) | the correctness gates and the PyTorch baselines | both of the above, plus patience |
+| [2b. Run Qwen3-TTS](#2b-run-qwen3-tts) | `tts speak --engine qwen3tts` | its checkpoint, ~4 GB more |
+| [3. Regenerate the fixtures](#3-regenerate-the-fixtures) | the correctness gates and the PyTorch baselines | all of the above, plus patience |
 
 Voice assets are **already in the repo** (`voices/`, ~200 KB), so you do not need any
 PyTorch to clone a voice — only to build a *new* one.
@@ -97,6 +98,58 @@ cargo run -p tts-cli --release -- speak \
 
 ---
 
+## 2b. Run Qwen3-TTS
+
+The easiest of the three: upstream is pip-installable, so there is no repo to clone and no
+`PYTHONPATH`.
+
+```sh
+# 1. Checkpoint (~3.9 GB talker + ~0.4 GB codec), both in one download.
+mkdir -p references/qwen3tts/weights/speech_tokenizer
+B=https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base/resolve/main
+for f in config.json generation_config.json preprocessor_config.json \
+         tokenizer_config.json vocab.json merges.txt model.safetensors; do
+  curl -sSL -C - -o "references/qwen3tts/weights/$f" "$B/$f"
+done
+for f in config.json configuration.json preprocessor_config.json model.safetensors; do
+  curl -sSL -C - -o "references/qwen3tts/weights/speech_tokenizer/$f" "$B/speech_tokenizer/$f"
+done
+
+# 2. Check the geometry before trusting anything (reads only the safetensors header).
+cargo run -q -p qwen3tts --release --bin qwen3tts-validate
+
+# 3. Speak. The voice asset is already in the repo.
+cargo run -p tts-cli --release -- speak --engine qwen3tts \
+    --voice voices/cosy-default-qwen3tts \
+    --text "Hello from the third engine." --out hello.wav
+```
+
+There is **no `tokenizer.json`** in this checkpoint, unlike CosyVoice's — the BPE is built from
+`vocab.json` plus `merges.txt` at load.
+
+Two things to know before using it:
+
+- **Ten languages, closed list**: en, de, es, zh, ja, fr, ko, ru, it, pt. `--set language=english`
+  selects one; the default is the reference's `auto`. There is no id for anything else, so text
+  outside that set has no faithful path through this engine.
+- **`q8_0` is the default weight format here**, unlike the other two engines. f32 measured
+  **1994 ms/frame against q8_0's 52 ms** on a 16 GB machine — the checkpoint is bf16 and the f32
+  cast is 6.3 GB of projections. `--quant f32` still works and is what the fixture gate uses,
+  but expect it to need more RAM than this Mac has for the GPU path.
+
+Only needed to build a *new* voice or regenerate fixtures:
+
+```sh
+/opt/homebrew/bin/python3.13 -m venv references/qwen3tts/.venv   # needs >= 3.10
+references/qwen3tts/.venv/bin/pip install -r references/qwen3tts/requirements.txt
+
+references/qwen3tts/.venv/bin/python references/qwen3tts/export_voice.py \
+    --model references/qwen3tts/weights --audio my_clip.wav \
+    --text "exact transcript" --name my-voice --out voices/my-voice-qwen3tts
+```
+
+---
+
 ## 3. Regenerate the fixtures
 
 The gates compare this port against per-stage fp32 activations dumped from PyTorch. The
@@ -172,6 +225,29 @@ is CPU-only on macOS and openai-whisper on MPS dies in `aten::empty.memory_forma
 # speaker similarity: median F0 and long-term average spectrum
 /path/to/CosyVoice/.venv/bin/python references/audio8/verify_voice.py \
     --reference /path/to/reference_clip.wav examples/cosy_senior.wav
+```
+
+### Qwen3-TTS fixtures
+
+```sh
+references/qwen3tts/.venv/bin/python references/qwen3tts/dump_fixtures.py \
+    --model references/qwen3tts/weights \
+    --voice voices/cosy-default-qwen3tts \
+    --out fixtures/qwen3tts
+cargo run -q -p qwen3tts --release --bin qwen3tts-validate   # 63 rows
+```
+
+fp32 on CPU, so a mismatch is a port bug rather than a precision difference. The gate's
+numerics tier also runs on CPU: an f32 talker is 6.3 GB and fails Metal buffer allocation
+outright on a 16 GB machine.
+
+A PyTorch control for the same text, to compare whole-utterance duration rather than one
+position:
+
+```sh
+references/qwen3tts/.venv/bin/python references/qwen3tts/reference_render.py \
+    --model references/qwen3tts/weights --audio examples/cosy_short.wav \
+    --ref-text "<the clip's transcript>" --text "Hello from Rust." --out /tmp/ref.wav
 ```
 
 ---

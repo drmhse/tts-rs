@@ -1,12 +1,13 @@
 //! Voice assets: conditioning precomputed offline, consumed cheaply at runtime.
 //!
-//! Both engines clone from a reference clip, and in both cases turning audio into
+//! All three engines clone from a reference clip, and in every case turning audio into
 //! conditioning needs machinery the runtime should not carry:
 //!
 //! | engine | what the clip must become | what that would cost in-process |
 //! |---|---|---|
 //! | `audio8` | 10 x N RVQ codes | the codec **encoder**, 126 tensors dropped by `convert_codec.py` |
 //! | `cosyvoice` | speaker embedding, speech tokens, prompt mel, prompt text tokens | `campplus.onnx` (28 MB) + `speech_tokenizer_v3.onnx` (969 MB), and an ONNX runtime |
+//! | `qwen3tts` | x-vector, `[T, 16]` RVQ codes, sliced transcript tokens | an ECAPA-TDNN encoder and an RVQ encoder, both in the talker checkpoint |
 //!
 //! None of that depends on the text being spoken, so it runs once in Python and ships
 //! as an asset. The Rust binary contains neither encoder.

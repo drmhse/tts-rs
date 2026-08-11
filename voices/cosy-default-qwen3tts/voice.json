@@ -1,0 +1,10 @@
+{
+  "engine": "qwen3tts",
+  "name": "cosy-default-qwen3tts",
+  "text": "Hi there! We're introducing a new feature where I can read ideas and topics allowed with a natural, human-like voice. Before you get started, please take a moment to go over this important information.",
+  "seconds": 11.76,
+  "notes": "ECAPA x-vector + 12Hz RVQ codes from CosyVoice's default_voice.wav; transcript matches voices/cosy-default-cosyvoice",
+  "enc_dim": 2048,
+  "frames": 147,
+  "codebooks": 16
+}

@@ -8,7 +8,7 @@ tts-cli          `tts engines` / `tts voice` / `tts speak --engine ...`
    |
 tts-engines      the registry: the ONLY place that knows which engines exist
    |        \
-  audio8     cosyvoice     engines: one crate each, no knowledge of each other
+  audio8  cosyvoice  qwen3tts   engines: one crate each, no knowledge of each other
    |    \    /    |
    |     tts-nn   |        shared model machinery: convs, activations, norms, RoPE, Proj
    \      /       /
@@ -42,11 +42,11 @@ speech. Where a shared helper has a fast form and a readable form, both stay:
 `layer_norm_plain` is the reference that `LayerNormPlain`'s fused kernel is checked against.
 
 **Unavailable engines are visible.** `Capabilities` carries `available` and a `reason`, so an
-engine can be registered before it works. Both engines are now available; the mechanism
+engine can be registered before it works. All three engines are now available; the mechanism
 stays, because the alternative — hiding an engine, or falling back to another — hands back
 audio in the wrong voice from the wrong model with no indication anything unusual happened.
 
-## The decision that makes a second engine tractable: voice assets
+## The decision that makes a second and third engine tractable: voice assets
 
 Both models clone from a reference clip, and in both cases turning audio into conditioning
 needs machinery the runtime should not carry.
@@ -55,6 +55,7 @@ needs machinery the runtime should not carry.
 |---|---|---|
 | `audio8` | `[10, N]` RVQ codes | the codec **encoder** — 126 tensors `convert_codec.py` drops |
 | `cosyvoice` | speaker embedding, speech tokens, prompt mel, prompt text tokens | `campplus.onnx` (28 MB) + `speech_tokenizer_v3.onnx` (969 MB), plus an ONNX runtime |
+| `qwen3tts` | x-vector, `[T, 16]` RVQ codes, sliced transcript tokens | an ECAPA-TDNN speaker encoder and a Mimi-style RVQ **encoder**, both inside the talker checkpoint |
 
 None of it depends on the text being spoken. So it happens once, offline, in Python, and
 ships as a directory:

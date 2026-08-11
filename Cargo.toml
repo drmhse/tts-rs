@@ -9,6 +9,7 @@ members = [
     "crates/tts-serve",
     "crates/audio8",
     "crates/cosyvoice",
+    "crates/qwen3tts",
     "crates/tts-probe",
 ]
 

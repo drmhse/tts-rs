@@ -1588,6 +1588,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "qwen3tts"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "candle-core",
+ "candle-nn",
+ "serde",
+ "serde_json",
+ "tokenizers 0.20.4",
+ "tts-bench",
+ "tts-core",
+ "tts-nn",
+]
+
+[[package]]
 name = "r-efi"
 version = "5.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2210,6 +2225,7 @@ dependencies = [
  "anyhow",
  "audio8",
  "cosyvoice",
+ "qwen3tts",
  "tts-core",
 ]
 
@@ -2221,6 +2237,7 @@ dependencies = [
  "candle-core",
  "candle-metal-kernels",
  "candle-nn",
+ "half",
  "objc2-metal",
 ]
 

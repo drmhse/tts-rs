@@ -130,6 +130,15 @@ if [ ! -f "$ROOT/fixtures/cosyvoice/oracle.safetensors" ]; then
   printf '  * The CosyVoice fixture gate has no fixtures. See docs/setup.md §3\n'
   missing=1
 fi
+if [ ! -d "$ROOT/references/qwen3tts/weights" ] \
+   || [ ! -f "$ROOT/references/qwen3tts/weights/model.safetensors" ]; then
+  printf '  * Qwen3-TTS is not set up — it needs its own checkpoint and venv. See docs/setup.md\n'
+  missing=1
+fi
+if [ ! -f "$ROOT/fixtures/qwen3tts/oracle.safetensors" ]; then
+  printf '  * The Qwen3-TTS fixture gate has no fixtures (the shape audit still runs).\n'
+  missing=1
+fi
 [ "$missing" -eq 0 ] && printf '\nEverything else is present too — both engines and both fixture gates.\n'
 
 printf '\nVerify with:  ./scripts/gates.sh\n'

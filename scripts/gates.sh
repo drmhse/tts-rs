@@ -55,9 +55,20 @@ else
   skip "fixtures/cosyvoice/oracle.safetensors or references/cosyvoice/weights missing"
 fi
 
+say "Qwen3-TTS gate"
+# Two tiers inside one bin: a shape audit that reads only the checkpoint header, then per-stage
+# numerics against fixtures/qwen3tts. The numerics tier reports itself as skipped when the
+# fixtures are absent. Gated on the talker checkpoint, which is what the audit reads.
+if [ -f references/qwen3tts/weights/model.safetensors ]; then
+  cargo run -q -p qwen3tts --release --bin qwen3tts-validate || fail=1
+else
+  skip "references/qwen3tts/weights/model.safetensors missing"
+fi
+
 say "End-to-end renders"
 mkdir -p target/gate
-for spec in "audio8:voices/cosy-default" "cosyvoice:voices/cosy-default-cosyvoice"; do
+for spec in "audio8:voices/cosy-default" "cosyvoice:voices/cosy-default-cosyvoice" \
+           "qwen3tts:voices/cosy-default-qwen3tts"; do
   id="${spec%%:*}"; voice="${spec##*:}"
   if [ -d "$voice" ]; then
     if ! cargo run -q -p tts-cli --release -- speak \

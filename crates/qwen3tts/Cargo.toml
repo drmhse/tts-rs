@@ -1,0 +1,36 @@
+[package]
+name = "qwen3tts"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+anyhow = { workspace = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tts-core = { path = "../tts-core" }
+tts-nn = { path = "../tts-nn" }
+tts-bench = { path = "../tts-bench" }
+tokenizers = { version = "0.20", default-features = false, features = ["onig"] }
+
+[features]
+default = ["metal"]
+metal = ["candle-core/metal", "candle-nn/metal", "tts-core/metal", "tts-nn/metal", "tts-bench/metal"]
+
+[[bin]]
+name = "qwen3tts-probe"
+path = "src/bin/probe.rs"
+
+[[bin]]
+name = "qwen3tts-validate"
+path = "src/bin/validate.rs"
+
+[[bin]]
+name = "qwen3tts-batch"
+path = "src/bin/batch.rs"
+
+[[bin]]
+name = "qwen3tts-codecsplit"
+path = "src/bin/codecsplit.rs"

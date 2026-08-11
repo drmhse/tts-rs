@@ -1,13 +1,19 @@
 # tts-rs
 
-Local text-to-speech in Rust: text in, speech out, one process, bounded memory. Two
-engines behind one interface, both faster than real time on an M4, both gated against
+Local text-to-speech in Rust: text in, speech out, one process, bounded memory. Three
+engines behind one interface, all faster than real time on an M4, all gated against
 per-stage fp32 fixtures dumped from their PyTorch references.
 
 | engine | model | RTF | vs PyTorch | validation |
 |---|---|---|---|---|
 | `audio8` | [Audio8-TTS-Preview-0.6b](https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b), 601 M, 44.1 kHz | **0.499** | 2.62× | greedy generation **bit-identical** |
 | `cosyvoice` | `FunAudioLLM/Fun-CosyVoice3-0.5B`, 995 M, 24 kHz | **0.697** | 6.27× | teacher-forced argmax **105/105 identical** |
+| `qwen3tts` | [`Qwen/Qwen3-TTS-12Hz-1.7B-Base`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base), 1.7 B, 24 kHz | **0.863** | — | argmax codebook 0 **identical**, predictor **15/15 identical** |
+
+`qwen3tts` supports **ten languages only** (en, de, es, zh, ja, fr, ko, ru, it, pt), so it is
+last in the catalogue and never the default. It also defaults to `q8_0` rather than f32 — the
+checkpoint is bf16 and f32 measured 38× slower on a 16 GB machine. See
+[docs/porting/qwen3tts.md](docs/porting/qwen3tts.md).
 
 ## Quick start
 
@@ -51,15 +57,18 @@ to do, in **[docs/serving.md](docs/serving.md)**.
 Markdown in, delivery audio plus word-level timings out, for a document of any length:
 
 ```sh
-scripts/narrate-book.sh --book path/to/document --out narration --engine cosyvoice
+scripts/narrate-book.sh --book path/to/document --out narration --engine qwen3tts
 scripts/verify-narration.py narration/*.webm
 ```
 
 One engine load for the whole run, resumable per *stage* (a section with a WAV master is
 never re-synthesised), deterministic under a seed, and gated: every section reports the share
 of words carrying a time measured from the audio, the longest run it could not measure, and
-how many cue boundaries land on a silence `ffmpeg` detected independently. A 16-hour document
-costs about 12 hours of synthesis and an hour of recognition.
+how many cue boundaries land on a silence `ffmpeg` detected independently.
+
+Cost scales with the engine: at `qwen3tts`'s RTF 0.31 a 16-hour document is about **5 hours** of
+synthesis, against ~12 at `cosyvoice`'s 0.71, plus an hour of recognition either way. See
+[docs/serving.md](docs/serving.md#which-engine-for-a-book) for why that path uses `f16` weights.
 
 Timings come from recognising the audio and matching it to the source text, not from placing
 known words into assumed windows — that shortcut measured a **median error of 4.8 s per

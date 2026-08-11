@@ -30,6 +30,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 ENGINE=cosyvoice
+QUANT=""
 OUT=narration
 PORT="${NARRATE_PORT:-3099}"
 KEY="${TTS_API_KEY:-narrate-local-key}"
@@ -58,8 +59,14 @@ die()  { printf '\033[31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 case "$ENGINE" in
   audio8)    VOICE=voices/cosy-default ;;
   cosyvoice) VOICE=voices/cosy-default-cosyvoice ;;
+  qwen3tts)  VOICE=voices/cosy-default-qwen3tts; QUANT="${NARRATE_QUANT:-f16}" ;;
   *) die "unknown engine '$ENGINE'" ;;
 esac
+# `f16` for qwen3tts, not its `q8_0` default. Both transformers are bandwidth-bound on weight
+# reads, and only a dense GEMM shares one read across a batch of segments: f16 batches 7.4x per
+# lane where q8_0 batches 1.1x. A chapter is hundreds of segments, so it always batches — RTF
+# 0.31 against 0.66. The trade is single-sentence latency, which a book does not have.
+# docs/performance/qwen3tts-batching.md has the numbers.
 command -v ffmpeg >/dev/null || die "ffmpeg not found (needed for Opus encoding)"
 mkdir -p "$OUT"
 
@@ -71,6 +78,7 @@ fi
 say "Starting $ENGINE on :$PORT (loads once, serves every chapter)"
 TTS_API_KEY="$KEY" ./target/release/tts-serve \
   --port "$PORT" --engine "$ENGINE" --voice "$VOICE" --max-chars "$MAX_CHARS" \
+  ${QUANT:+--quant "$QUANT"} \
   >"$OUT/.server.log" 2>&1 &
 SERVER=$!
 trap 'kill $SERVER 2>/dev/null; wait $SERVER 2>/dev/null' EXIT

@@ -1,12 +1,13 @@
-# Status: two engines, both ported, both validated
+# Status: three engines, all ported, all validated
 
-Text in, speech out, one process, bounded memory. 13916 lines of Rust across eight crates,
+Text in, speech out, one process, bounded memory. 17819 lines of Rust across 10 crates,
 no ONNX and no Python at runtime.
 
 | engine | model | params | state | RTF | gate |
 |---|---|---|---|---|---|
 | `audio8` | Audio8-TTS-Preview-0.6b, 44.1 kHz | 601 M | ready | **0.499** | 8 checks, greedy generation bit-identical |
 | `cosyvoice` | Fun-CosyVoice3-0.5B, 24 kHz | 995 M | ready | **0.697** | 27 checks, teacher-forced ids 105/105 |
+| `qwen3tts` | Qwen3-TTS-12Hz-1.7B-Base, 24 kHz | 1.7 B | ready | **0.863** | 63 checks, argmax code 0 identical, predictor 15/15 |
 
 ```
 ./scripts/gates.sh                                 # everything below, in order
@@ -15,6 +16,8 @@ cargo test --release                               # 32 tests incl. the doctest
 cargo run -p audio8   --release --bin audio8-validate      # Audio8 fixture gate
 cargo run -p cosyvoice --release --bin cosyvoice-validate    # CosyVoice fixture gate
 cargo run -p cosyvoice --release --bin cosyvoice-bench       # where CosyVoice's time goes
+cargo run -p qwen3tts  --release --bin qwen3tts-validate      # Qwen3-TTS gate (shapes + numerics)
+QWEN3TTS_TIMING=1 cargo run -p qwen3tts --release --bin qwen3tts-probe   # per-frame split
 cargo run -p tts-cli --release -- engines
 ```
 
