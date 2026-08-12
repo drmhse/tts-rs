@@ -92,8 +92,29 @@
     1612 words of prose — <code>examples/chapter.txt</code> in the repo — rendered on one
     M4 / 16&nbsp;GB laptop, each engine in the configuration it ships in. These are the
     complete chapters — eleven to thirteen minutes each — in two voices, cloned from two
-    reference clips of about ten seconds.
+    reference clips of about ten seconds. Fastest first.
   </p>
+
+  <div class="engine">
+    <header>
+      <h3>qwen3tts</h3>
+      <span class="tag">Qwen3-TTS-12Hz-1.7B-Base · 2.10 B · 24 kHz · <code>--quant f16</code></span>
+    </header>
+    <div class="voices">
+      <label>female</label>
+      <audio controls preload="none" src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-qwen3tts.webm">
+        <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-qwen3tts.webm">download</a>
+      </audio>
+      <label>male</label>
+      <audio controls preload="none" src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-qwen3tts-male.webm">
+        <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-qwen3tts-male.webm">download</a>
+      </audio>
+    </div>
+    <div class="stats">
+      <span>female <b>0.261</b> · 3m 2s → 11:36</span>
+      <span>male <b>0.252</b> · 2m 40s → 10:34</span>
+    </div>
+  </div>
 
   <div class="engine">
     <header>
@@ -134,27 +155,6 @@
     <div class="stats">
       <span>female <b>0.718</b> · 9m 12s → 12:48</span>
       <span>male <b>0.703</b> · 8m 15s → 11:44</span>
-    </div>
-  </div>
-
-  <div class="engine">
-    <header>
-      <h3>qwen3tts</h3>
-      <span class="tag">Qwen3-TTS-12Hz-1.7B-Base · 2.10 B · 24 kHz · <code>--quant f16</code></span>
-    </header>
-    <div class="voices">
-      <label>female</label>
-      <audio controls preload="none" src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-qwen3tts.webm">
-        <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-qwen3tts.webm">download</a>
-      </audio>
-      <label>male</label>
-      <audio controls preload="none" src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-qwen3tts-male.webm">
-        <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-qwen3tts-male.webm">download</a>
-      </audio>
-    </div>
-    <div class="stats">
-      <span>female <b>0.261</b> · 3m 2s → 11:36</span>
-      <span>male <b>0.252</b> · 2m 40s → 10:34</span>
     </div>
   </div>
 
@@ -228,9 +228,9 @@ curl -X POST localhost:3003/tts -H "X-API-Key: secret" \
       <tr><th>engine</th><th>RTF (both voices)</th><th>wall, fastest</th><th>batches</th><th>reach for it when</th></tr>
     </thead>
     <tbody>
+      <tr><td class="mono">qwen3tts</td><td class="num">0.252–0.261</td><td class="num">2m 40s</td><td>yes, at f16</td><td>you are narrating something long</td></tr>
       <tr><td class="mono">audio8</td><td class="num">0.527–0.536</td><td class="num">5m 47s</td><td>no</td><td>you want 44.1 kHz output</td></tr>
       <tr><td class="mono">cosyvoice</td><td class="num">0.703–0.718</td><td class="num">8m 15s</td><td>no</td><td>you want the widest language coverage</td></tr>
-      <tr><td class="mono">qwen3tts</td><td class="num">0.252–0.261</td><td class="num">2m 40s</td><td>yes, at f16</td><td>you are narrating something long</td></tr>
     </tbody>
   </table>
   </div>
