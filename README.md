@@ -155,18 +155,6 @@ curl -X POST localhost:3003/tts -H "X-API-Key: secret" \
 where the time went without a second request. **`voice` and `seed` are per request** — the
 first selects a voice asset without a restart, the second makes a render reproducible.
 
-Verified side by side against the Python service on the same request: identical WAV format,
-identical headers, identical auth (`Bearer` or `X-API-Key`, constant-time compare, `503` when
-no key is configured), errors as `{"detail": …}`. **RTF 0.71 over HTTP** on the 132-word
-passage.
-
-What it refuses is as deliberate as what it serves. `speed` other than 1.0, `mode=instruct`,
-`mode=cross_lingual`, the durable job queue and forced alignment all answer **501 with an
-explanation** rather than quietly doing something else — returning speed-1.0 audio to a client
-that asked for 1.5 would report the request as honoured when it was not. Synthesis is
-serialised behind a semaphore: two requests interleaving on one Metal queue make both slower
-and neither faster.
-
 ## Narrating long documents
 
 ```sh
@@ -178,12 +166,6 @@ One engine load for the whole run, resumable per *stage* (a section with a WAV m
 re-synthesised), deterministic under a seed. A 16-hour document is about **4 hours** of
 synthesis at `qwen3tts`'s 0.260, against ~12 at `cosyvoice`'s 0.726, plus an hour of
 recognition either way.
-
-Timings come from recognising the audio and matching it to the source text, not from placing
-known words into assumed windows — that shortcut measured a **median error of 4.8 s per word**
-while reporting 99.4% of words "aligned". Every section reports the share of words carrying a
-measured time, the longest run it could not measure, and how many cue boundaries land on a
-silence `ffmpeg` detected independently.
 
 ## Using it as a library
 
@@ -201,11 +183,6 @@ let out = engine.synthesize(&request)?;
 tts_core::wav::write("hello.wav", &out.audio)?;
 println!("RTF {:.3}", out.stats.rtf(out.audio.seconds()));
 ```
-
-That snippet is the doctest on `tts_engines`, so it is compiled on every `cargo test` rather
-than left to rot. A voice asset built for one engine is refused by another rather than silently
-substituted, and an engine that exists but cannot run yet reports `available: false` with a
-reason instead of disappearing from the list.
 
 ## Documentation
 
