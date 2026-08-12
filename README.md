@@ -94,10 +94,6 @@ it can do. Against a service that does use MPS it is ahead by about 5%.
 
 ## Serving it as an HTTP API
 
-One engine, loaded once, answering requests — no per-request model load, which is where the
-**3.0 s start** beats the Python service's 15–17 s. Wire-compatible with the FastAPI service it
-replaces, so an existing client switches by changing port.
-
 ```sh
 TTS_API_KEY=secret cargo run -p tts-serve --release -- --port 3003
 
@@ -170,7 +166,7 @@ crates/tts-core/        the Engine trait, voice assets, segmentation, WAV, the P
 crates/tts-nn/          shared model machinery + the custom Metal kernels
 crates/tts-engines/     the registry — the one place that knows which engines exist
 crates/tts-cli/         the `tts` binary: engines / voice / speak
-crates/tts-serve/       the HTTP service, wire-compatible with the Python one
+crates/tts-serve/       the HTTP service: one engine, loaded once, behind a semaphore
 crates/tts-bench/       the thermally-honest measurement harness
 crates/tts-probe/       op-level benchmarks, one binary per question
 crates/{audio8,cosyvoice,qwen3tts}/   one engine each, plus its fixture gate
