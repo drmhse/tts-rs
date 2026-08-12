@@ -16,8 +16,11 @@ traps each port hit, and what did not work.
 ## Setup
 
 ```sh
-./scripts/bootstrap.sh                 # all three engines, ~13 GB, nothing manual
-./scripts/bootstrap.sh --audio8-only   # stop after the first engine, ~4 GB
+./scripts/bootstrap.sh                       # all three engines, ~13 GB, nothing manual
+./scripts/bootstrap.sh --list                # the ids, their models, what each costs
+./scripts/bootstrap.sh qwen3tts              # just one, ~4.3 GB
+./scripts/bootstrap.sh audio8 cosyvoice      # two
+./scripts/bootstrap.sh --force audio8        # redo a conversion that already ran
 ```
 
 That is the whole setup. It checks the toolchain, downloads and converts all three

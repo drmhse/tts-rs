@@ -171,9 +171,54 @@ cargo run -p tts-cli --release -- speak --engine qwen3tts \
     --voice voices/cosy-default-qwen3tts --quant f16 \
     --text-file examples/chapter.txt --out chapter.wav</code></pre>
   <p class="caveat">
-    <code>bootstrap.sh</code> installs all three engines, their checkpoints and the fixtures
-    for the correctness gates — one command, nothing manual. Budget ~13&nbsp;GB of disk, or
-    pass <code>--audio8-only</code> to stop after the first engine at ~4&nbsp;GB.
+    <code>bootstrap.sh</code> downloads and converts the checkpoints, fetches the fixtures for
+    the correctness gates, and builds — one command, nothing manual. Name the engines you want
+    (<code>bootstrap.sh qwen3tts</code>, ~4.3&nbsp;GB) or take all three, at ~13&nbsp;GB;
+    <code>--list</code> prints the ids and what each costs.
+  </p>
+
+  <h2>Or run it as an HTTP API</h2>
+  <p class="caveat">
+    <code>tts-serve</code> loads one engine once and answers requests from it — no per-request
+    model load, which is where the 3&ndash;4&nbsp;second start beats a Python service&rsquo;s
+    15&ndash;17. It is wire-compatible with the FastAPI service it replaces, so an existing
+    client switches by pointing at a different port.
+  </p>
+
+<pre><code>TTS_API_KEY=secret cargo run -p tts-serve --release -- --port 3003
+
+curl -X POST localhost:3003/tts -H "X-API-Key: secret" \
+     -H 'content-type: application/json' \
+     -d '{"text":"Hello from Rust.","voice":"voices/cosy-default-male","seed":7}' \
+     -o out.wav -D headers.txt</code></pre>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>route</th><th></th></tr></thead>
+    <tbody>
+      <tr><td class="mono">POST /tts</td><td>WAV body, PCM s16le mono</td></tr>
+      <tr><td class="mono">POST /tts/stream</td><td>same, buffered rather than incremental</td></tr>
+      <tr><td class="mono">GET /v1/capabilities</td><td>engines, sample rates, weight formats each supports</td></tr>
+      <tr><td class="mono">GET /health</td><td>liveness</td></tr>
+      <tr><td class="mono">GET /</td><td>lists live routes <em>and</em> the unimplemented ones</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p class="caveat">
+    Two things worth knowing. Every response carries its own cost —
+    <code>x-audio-seconds</code>, <code>x-wall-seconds</code>, <code>x-rtf</code>, and
+    <code>x-stages</code> with the per-stage split, so a client can see where the time went
+    without a second request. And <code>voice</code> and <code>seed</code> are per request:
+    the first picks a voice asset without restarting, the second makes a render reproducible.
+  </p>
+  <p class="caveat">
+    What it refuses is as deliberate as what it serves. <code>speed</code> other than 1.0,
+    <code>mode=instruct</code>, <code>mode=cross_lingual</code> and the durable job queue all
+    answer <strong>501 with an explanation</strong> rather than quietly returning something
+    else — returning speed-1.0 audio to a client that asked for 1.5 would report the request
+    as honoured when it was not. Synthesis is serialised behind a semaphore, because two
+    requests interleaving on one Metal queue make both slower and neither faster.
   </p>
 
   <h2>How they compare</h2>

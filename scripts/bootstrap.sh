@@ -1,30 +1,61 @@
 #!/usr/bin/env bash
 #
-# From a fresh clone to all three engines working. Nothing here is manual.
+# From a fresh clone to working speech. Nothing here is manual.
 #
-# What it does:
-#   1. checks the toolchain and the platform
-#   2. downloads the Audio8 checkpoint (~2.4 GB) from Hugging Face
-#   3. creates references/audio8/.venv and folds the codec's weight_norm into safetensors
-#   4. downloads and converts the CosyVoice and Qwen3-TTS checkpoints (~8 GB together)
-#   5. fetches the derived assets (~130 MB): the fixture oracles for all three gates, and
-#      the two CosyVoice artifacts that need the upstream python package to produce
-#   6. builds the workspace
+#   ./scripts/bootstrap.sh                              all three engines, ~13 GB
+#   ./scripts/bootstrap.sh qwen3tts                     one engine, ~4.3 GB
+#   ./scripts/bootstrap.sh audio8 cosyvoice             two of them
+#   ./scripts/bootstrap.sh --list                       what the ids are, and what each costs
+#   ./scripts/bootstrap.sh --force audio8               redo a conversion that already ran
 #
-# Budget ~13 GB of disk and a long first run; almost all of it is download. Pass
-# --audio8-only to stop after the first engine, which needs ~4 GB.
+# Whichever engines you name, it checks the toolchain, downloads and converts their
+# checkpoints, fetches the fixtures for every gate (~130 MB, cheap, so always), and builds.
 #
-# No engine needs its upstream *repository* any more. CosyVoice's two un-derivable
-# artifacts are fetched in step 5, so converting its checkpoint is a plain `torch.load`
-# under the venv this script already built.
+# No engine needs its upstream *repository*. CosyVoice's two un-derivable artifacts are
+# fetched as assets, so converting its checkpoint is a plain `torch.load`.
 #
-# Re-running is safe: every step is skipped if its output already exists. Pass --force
-# to redo the codec conversion, or --audio8-only to skip the other two engines.
+# Re-running is safe: every step is skipped if its output already exists.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-FORCE="${1:-}"
+
+ALL_ENGINES="audio8 cosyvoice qwen3tts"
+FORCE=""
+ENGINES=""
+
+usage() {
+  cat <<'USAGE'
+usage: scripts/bootstrap.sh [--force] [--list] [engine ...]
+
+  engine    audio8 | cosyvoice | qwen3tts   (default: all three)
+  --force   redo a conversion whose output already exists
+  --list    print the engines, their models and their disk cost, then exit
+USAGE
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --force) FORCE=1; shift ;;
+    --list)
+      printf '%-11s %-34s %8s  %s\n' engine model disk notes
+      printf '%-11s %-34s %8s  %s\n' audio8    Audio8-TTS-Preview-0.6b   "~4 GB"   "44.1 kHz, highest fidelity"
+      printf '%-11s %-34s %8s  %s\n' cosyvoice Fun-CosyVoice3-0.5B       "~4 GB"   "widest language coverage"
+      printf '%-11s %-34s %8s  %s\n' qwen3tts  Qwen3-TTS-12Hz-1.7B-Base  "~4.3 GB" "batches; best for long documents"
+      exit 0 ;;
+    -h|--help) usage; exit 0 ;;
+    audio8|cosyvoice|qwen3tts) ENGINES="$ENGINES $1"; shift ;;
+    --audio8-only) ENGINES="$ENGINES audio8"; shift ;;   # the old spelling
+    *) usage >&2; printf '\nunknown argument: %s\n' "$1" >&2; exit 2 ;;
+  esac
+done
+
+[ -n "$ENGINES" ] || ENGINES="$ALL_ENGINES"
+# Normalise: the loop above leaves a leading space, which would make `${ENGINES%% *}` empty.
+# shellcheck disable=SC2086
+set -- $ENGINES
+ENGINES="$*"
+wants() { case " $ENGINES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 say()  { printf '\033[1m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[33mwarning:\033[0m %s\n' "$*" >&2; }
@@ -66,7 +97,9 @@ need_python() {
 # ------------------------------------------------------------------ 2. checkpoint
 
 WEIGHTS="$ROOT/references/audio8/weights"
-if [ -f "$WEIGHTS/model.safetensors" ] && [ -f "$WEIGHTS/codec.pth" ]; then
+if ! wants audio8; then
+  say "Skipping the Audio8 checkpoint (not selected)"
+elif [ -f "$WEIGHTS/model.safetensors" ] && [ -f "$WEIGHTS/codec.pth" ]; then
   say "Audio8 checkpoint already present in references/audio8/weights — skipping download"
 else
   say "Downloading Audio8/Audio8-TTS-Preview-0.6b (~2.4 GB) into references/audio8/weights"
@@ -86,8 +119,13 @@ PYEOF
 fi
 
 # ------------------------------------------------------------------ 3. python env
+#
+# Needed by Audio8's codec fold and by CosyVoice's conversion. Qwen3-TTS alone needs no
+# python at all — its setup is downloads — so building a torch venv for it would be waste.
 
-if [ -x "$VENV/bin/python" ]; then
+if ! wants audio8 && ! wants cosyvoice; then
+  say "Skipping the python env (only qwen3tts selected, which needs none)"
+elif [ -x "$VENV/bin/python" ]; then
   say "references/audio8/.venv already exists — skipping (delete it to rebuild)"
 else
   need_python
@@ -101,7 +139,9 @@ fi
 # ------------------------------------------------------------------ 4. fold codec
 
 CODEC="$WEIGHTS/codec.safetensors"
-if [ -f "$CODEC" ] && [ "$FORCE" != "--force" ]; then
+if ! wants audio8; then
+  :
+elif [ -f "$CODEC" ] && [ -z "$FORCE" ]; then
   say "references/audio8/weights/codec.safetensors already built — skipping (pass --force to redo)"
 else
   say "Folding the codec's weight_norm into safetensors (~1 GB out)"
@@ -112,13 +152,13 @@ fi
 #
 # Both are plain downloads plus, for CosyVoice, a `torch.load` re-serialisation. Neither
 # needs its upstream repo: the two artifacts that used to require one are fetched in step 5.
-# Skipped entirely with --audio8-only, since together they are another ~8 GB.
+# Each runs only if its engine was asked for.
 
 COSY_W="$ROOT/references/cosyvoice/weights"
 QWEN_W="$ROOT/references/qwen3tts/weights"
 
-if [ "$FORCE" = "--audio8-only" ]; then
-  say "Skipping CosyVoice and Qwen3-TTS (--audio8-only)"
+if ! wants cosyvoice; then
+  say "Skipping the CosyVoice checkpoint (not selected)"
 else
   if [ -f "$COSY_W/llm.safetensors" ]; then
     say "CosyVoice checkpoint already converted — skipping"
@@ -138,6 +178,11 @@ PYEOF
     fi
   fi
 
+fi
+
+if ! wants qwen3tts; then
+  say "Skipping the Qwen3-TTS checkpoint (not selected)"
+else
   if [ -f "$QWEN_W/model.safetensors" ]; then
     say "Qwen3-TTS checkpoint already present — skipping"
   else
@@ -170,36 +215,42 @@ say "Fetching the derived assets"
 say "Building the workspace"
 cargo build --release
 
-say "Done."
-cat <<'EOF'
+# Show the command for an engine that was actually set up, not always the first one.
+first="${ENGINES%% *}"
+case "$first" in
+  audio8)    voice=voices/cosy-default ;;
+  cosyvoice) voice=voices/cosy-default-cosyvoice ;;
+  qwen3tts)  voice=voices/cosy-default-qwen3tts ;;
+esac
 
-    cargo run -p tts-cli --release -- speak \
-        --engine audio8 --voice voices/cosy-default \
+say "Done — set up: $ENGINES"
+cat <<EOF
+
+    cargo run -p tts-cli --release -- speak \\
+        --engine $first --voice $voice \\
         --text "Hello from a fresh checkout." --out hello.wav
 
-    cargo run -p tts-cli --release -- engines      # all three, and what each supports
-    ./scripts/gates.sh                             # everything verifiable
+    cargo run -p tts-cli --release -- engines     # what is available, and what each supports
+    ./scripts/gates.sh                            # everything verifiable
+    TTS_API_KEY=secret cargo run -p tts-serve --release -- --port 3003   # the HTTP API
 EOF
 
-# Report what is actually still missing rather than assuming a fresh machine. After the asset
-# fetch the only things that can be absent are the two checkpoints nobody can download for
-# you — so name those, not the fixtures.
+# Report what is missing rather than assuming. An engine that was not asked for is not
+# missing, so name only the ones that were selected — and the fixture gates, which are
+# fetched for every engine because they cost 130 MB and prove the ports are still correct.
 missing=0
-if [ ! -f "$ROOT/references/cosyvoice/weights/llm.safetensors" ]; then
-  printf '\n  * CosyVoice has no checkpoint — download Fun-CosyVoice3-0.5B and convert it.\n'
-  printf '    See docs/reference.md#setup. Its other assets are already fetched.\n'
-  missing=1
-fi
-if [ ! -f "$ROOT/references/qwen3tts/weights/model.safetensors" ]; then
-  printf '  * Qwen3-TTS has no checkpoint — see docs/reference.md#setup.\n'
-  missing=1
-fi
+wants audio8 && [ ! -f "$WEIGHTS/codec.safetensors" ] && {
+  printf '\n  * Audio8 has no folded codec — rerun with --force.\n'; missing=1; }
+wants cosyvoice && [ ! -f "$COSY_W/llm.safetensors" ] && {
+  printf '\n  * CosyVoice has no checkpoint — see docs/reference.md#setup.\n'; missing=1; }
+wants qwen3tts && [ ! -f "$QWEN_W/model.safetensors" ] && {
+  printf '\n  * Qwen3-TTS has no checkpoint — see docs/reference.md#setup.\n'; missing=1; }
 for e in audio8 cosyvoice qwen3tts; do
   if [ ! -f "$ROOT/fixtures/$e/oracle.safetensors" ]; then
     printf '  * The %s fixture gate has no fixtures — rerun ./scripts/fetch-assets.sh\n' "$e"
     missing=1
   fi
 done
-[ "$missing" -eq 0 ] && printf '\nEverything else is present too — all three engines and all three fixture gates.\n'
+[ "$missing" -eq 0 ] && printf '\nEverything selected is present, and all three fixture gates.\n'
 
 printf '\nVerify with:  ./scripts/gates.sh\n'
