@@ -10,7 +10,7 @@
 #
 # The last two are why this script exists. Producing them imports CosyVoice model code,
 # which pins python 3.10 and torch 2.3.1; fetching them instead means *running* CosyVoice
-# needs neither, only the checkpoint and a plain `torch.load`. See docs/setup.md §2.
+# needs neither, only the checkpoint and a plain `torch.load`. See docs/reference.md#setup.
 #
 # curl and shasum only — no python, so this runs before any venv exists. Every file is
 # checked against the published SHA256SUMS and a mismatch is deleted rather than kept.
@@ -18,7 +18,7 @@
 # Re-running is safe: a file that is already present and hashes correctly is skipped.
 # Pass --force to refetch everything.
 #
-# Regenerating from source instead is documented in docs/setup.md §3, and is the stronger
+# Regenerating from source instead is documented in docs/reference.md#3-regenerating-the-fixtures, and is the stronger
 # move if you are auditing the ports rather than using them — a gate that verifies against
 # tensors somebody else uploaded is only as trustworthy as the upload.
 set -euo pipefail
@@ -42,11 +42,15 @@ if [ -t 2 ]; then PROGRESS=(-#); else PROGRESS=(-sS); fi
 # Where each path in the asset repo lands in this checkout. The fixtures keep their layout;
 # the CosyVoice pair goes next to the converted weights, because that is where the engine
 # looks for them.
+#
+# An unrecognised path prints nothing and is skipped, not fatal: the dataset also carries
+# things this script has no business installing — the rendered samples, for one — and a repo
+# that grows a directory must not break every existing clone's bootstrap.
 dest_for() {
   case "$1" in
     cosyvoice/*) printf 'references/cosyvoice/weights/%s' "${1#cosyvoice/}" ;;
     fixtures/*)  printf '%s' "$1" ;;
-    *)           die "unexpected path in SHA256SUMS: $1" ;;
+    *)           printf '' ;;
   esac
 }
 
@@ -58,10 +62,15 @@ curl -sSfL -o "$SUMS" "$BASE/SHA256SUMS" \
 
 fetched=0
 skipped=0
+ignored=0
 while read -r want path; do
   [ -n "${path:-}" ] || continue
   path="${path#./}"
   dest="$(dest_for "$path")"
+  if [ -z "$dest" ]; then
+    ignored=$((ignored + 1))
+    continue
+  fi
 
   if [ -f "$dest" ] && [ "$FORCE" != "--force" ]; then
     if [ "$(shasum -a 256 "$dest" | cut -d' ' -f1)" = "$want" ]; then
@@ -81,16 +90,17 @@ while read -r want path; do
     die "checksum mismatch for $path
    expected $want
    got      $got
-   The upload may have been replaced. Regenerate from source instead (docs/setup.md §3)."
+   The upload may have been replaced. Regenerate from source instead (docs/reference.md#3-regenerating-the-fixtures)."
   fi
   mv "$dest.part" "$dest"
   fetched=$((fetched + 1))
 done < "$SUMS"
 
 say "Done: $fetched fetched, $skipped already present and verified."
+[ "$ignored" -gt 0 ] && printf '  (%d dataset file(s) this script does not install, e.g. the rendered samples)\n' "$ignored"
 
 # CosyVoice still needs its checkpoint converted; say so rather than implying it can run.
 if [ ! -f references/cosyvoice/weights/llm.safetensors ]; then
   printf '\n  * CosyVoice has its assets but not its weights — convert the checkpoint,\n'
-  printf '    see docs/setup.md §2. Everything else here is ready.\n'
+  printf '    see docs/reference.md#setup. Everything else here is ready.\n'
 fi

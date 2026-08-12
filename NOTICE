@@ -56,4 +56,4 @@ models. They are activations computed by them, tensors drawn by their constructo
 tokenizers serialised by their code, or speaker assets encoded from reference audio they
 ship. The Rust reimplementations in crates/ were written against these models' published
 architectures and deliberately differ from them in the ways documented in
-docs/porting/ and docs/status.md.
+docs/reference.md.

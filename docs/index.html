@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tts-rs — local text-to-speech in Rust</title>
+<meta name="description" content="Three PyTorch speech models ported to Rust. Hear the same chapter narrated by each, and what it cost to render.">
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #5c5c5c;
+    --line: #e3e3e3;
+    --card: #fafafa;
+    --accent: #b3541e;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161a; --fg: #e8e6e3; --muted: #9aa0a6;
+      --line: #2a2e35; --card: #1b1e24; --accent: #e2915b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a; --fg: #e8e6e3; --muted: #9aa0a6;
+    --line: #2a2e35; --card: #1b1e24; --accent: #e2915b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 3rem 1.25rem 5rem;
+    background: var(--bg); color: var(--fg);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 46rem; margin: 0 auto; }
+  h1 { font-size: 2rem; margin: 0 0 .4rem; letter-spacing: -.02em; }
+  h2 { font-size: 1.15rem; margin: 3rem 0 .75rem; letter-spacing: -.01em; }
+  .lede { color: var(--muted); font-size: 1.05rem; margin: 0 0 .5rem; }
+  code, .mono { font-family: var(--mono); font-size: .9em; }
+  a { color: var(--accent); }
+
+  .engine {
+    border: 1px solid var(--line); border-radius: 10px;
+    background: var(--card); padding: 1.1rem 1.2rem; margin: 0 0 1rem;
+  }
+  .engine header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .6rem; }
+  .engine h3 { font-family: var(--mono); font-size: 1rem; margin: 0; }
+  .tag { color: var(--muted); font-size: .85rem; }
+  audio { width: 100%; margin: .85rem 0 .6rem; }
+  .stats { display: flex; flex-wrap: wrap; gap: 1.4rem; font-size: .875rem; color: var(--muted); }
+  .stats b { color: var(--fg); font-family: var(--mono); font-weight: 600; }
+
+  .headline {
+    border-left: 3px solid var(--accent); padding: .1rem 0 .1rem 1rem;
+    margin: 1.5rem 0; font-size: 1.05rem;
+  }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { text-align: left; padding: .5rem .75rem .5rem 0; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+  td.num { font-family: var(--mono); }
+  pre {
+    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    padding: .9rem 1rem; overflow-x: auto; font-size: .85rem; line-height: 1.5;
+  }
+  footer { margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+           color: var(--muted); font-size: .875rem; }
+  .caveat { color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>tts-rs</h1>
+  <p class="lede">
+    Local text-to-speech in Rust. Three voice-cloning speech models ported from PyTorch,
+    validated stage by stage against fp32 activations dumped from their references.
+    One process, no Python at runtime.
+  </p>
+  <p class="caveat">
+    <a href="https://github.com/drmhse/tts-rs">Source on GitHub</a> ·
+    Apache-2.0 · macOS on Apple silicon
+  </p>
+
+  <h2>The same chapter, narrated by each engine</h2>
+  <p class="caveat">
+    1612 words of prose — <code>examples/chapter.txt</code> in the repo — rendered on one
+    M4 / 16&nbsp;GB laptop. Each engine runs in the configuration it ships in. Samples below
+    are the first 45 seconds; the full renders are linked beside them.
+  </p>
+
+  <div class="engine">
+    <header>
+      <h3>audio8</h3>
+      <span class="tag">Audio8-TTS-Preview-0.6b · 601 M · 44.1 kHz</span>
+    </header>
+    <audio controls preload="none"
+      src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/sample-audio8.m4a">
+      Your browser cannot play audio inline —
+      <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/sample-audio8.m4a">download the sample</a>.
+    </audio>
+    <div class="stats">
+      <span>RTF <b>0.536</b></span>
+      <span>rendered in <b>6m 12s</b></span>
+      <span>produced <b>11:34</b></span>
+      <span><a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-audio8.webm">full render</a></span>
+    </div>
+  </div>
+
+  <div class="engine">
+    <header>
+      <h3>cosyvoice</h3>
+      <span class="tag">Fun-CosyVoice3-0.5B · 995 M · 24 kHz</span>
+    </header>
+    <audio controls preload="none"
+      src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/sample-cosyvoice.m4a">
+      Your browser cannot play audio inline —
+      <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/sample-cosyvoice.m4a">download the sample</a>.
+    </audio>
+    <div class="stats">
+      <span>RTF <b>0.718</b></span>
+      <span>rendered in <b>9m 12s</b></span>
+      <span>produced <b>12:48</b></span>
+      <span><a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-cosyvoice.webm">full render</a></span>
+    </div>
+  </div>
+
+  <div class="engine">
+    <header>
+      <h3>qwen3tts</h3>
+      <span class="tag">Qwen3-TTS-12Hz-1.7B-Base · 2.10 B · 24 kHz · <code>--quant f16</code></span>
+    </header>
+    <audio controls preload="none"
+      src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/sample-qwen3tts.m4a">
+      Your browser cannot play audio inline —
+      <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/sample-qwen3tts.m4a">download the sample</a>.
+    </audio>
+    <div class="stats">
+      <span>RTF <b>0.261</b></span>
+      <span>rendered in <b>3m 2s</b></span>
+      <span>produced <b>11:36</b></span>
+      <span><a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-qwen3tts.webm">full render</a></span>
+    </div>
+  </div>
+
+  <p class="headline">
+    A chapter becomes <strong>11 minutes of speech in 3 minutes</strong>, on a laptop.
+    A 16-hour book is about four hours of compute rather than twelve.
+  </p>
+
+  <h2>Try it</h2>
+<pre><code>git clone https://github.com/drmhse/tts-rs &amp;&amp; cd tts-rs
+./scripts/bootstrap.sh
+
+cargo run -p tts-cli --release -- speak --engine qwen3tts \
+    --voice voices/cosy-default-qwen3tts --quant f16 \
+    --text-file examples/chapter.txt --out chapter.wav</code></pre>
+  <p class="caveat">
+    <code>bootstrap.sh</code> pulls the Audio8 checkpoint and the fixtures for all three
+    correctness gates. The other two checkpoints are a few more commands.
+  </p>
+
+  <h2>How they compare</h2>
+  <div class="scroll">
+  <table>
+    <thead>
+      <tr><th>engine</th><th>RTF</th><th>wall</th><th>batches</th><th>reach for it when</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="mono">audio8</td><td class="num">0.536</td><td class="num">6m 12s</td><td>no</td><td>you want 44.1 kHz output</td></tr>
+      <tr><td class="mono">cosyvoice</td><td class="num">0.718</td><td class="num">9m 12s</td><td>no</td><td>you want the widest language coverage</td></tr>
+      <tr><td class="mono">qwen3tts</td><td class="num">0.261</td><td class="num">3m 2s</td><td>yes, at f16</td><td>you are narrating something long</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="caveat">
+    Compare wall time, not just RTF: the three do not produce the same duration from the same
+    text — <code>cosyvoice</code> speaks slowest — and RTF divides by audio produced, which
+    flatters a slower-speaking engine. <code>qwen3tts</code> wins here only because it batches
+    across sections; on a short passage it is the slowest of the three, at 0.665.
+  </p>
+
+  <h2>What it is validated against</h2>
+  <p>
+    Every engine is gated against per-stage fp32 activations dumped from its PyTorch
+    reference, so a failure localises to a stage rather than to “the audio sounds wrong”.
+    <code>audio8</code>’s greedy generation is <strong>bit-identical</strong> to its reference;
+    <code>cosyvoice</code>’s teacher-forced argmax matches 105/105.
+  </p>
+  <p class="caveat">
+    Free-running sampled output is deliberately <em>not</em> gated on equality —
+    <code>ras_sampling</code> draws from torch’s generator, so a sampled sequence is not
+    reproducible across implementations. Quality is checked separately by word error rate.
+    Known limitations, including an undiagnosed regression in two convolution stages, are in
+    the <a href="https://github.com/drmhse/tts-rs#honest-limitations">README</a>.
+  </p>
+
+  <footer>
+    Ported from <a href="https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b">Audio8-TTS-Preview-0.6b</a>,
+    <a href="https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B">Fun-CosyVoice3-0.5B</a> and
+    <a href="https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base">Qwen3-TTS-12Hz-1.7B-Base</a>,
+    all Apache-2.0. This repository contains no model weights.
+    Samples hosted in the <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets">companion dataset</a>.
+  </footer>
+
+</div>
+</body>
+</html>
