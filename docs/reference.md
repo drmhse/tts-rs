@@ -15,8 +15,19 @@ traps each port hit, and what did not work.
 
 ## Setup
 
-Three levels. Stop at whichever you need. Voice assets are already in the repo (`voices/`,
-~200 KB), so cloning a voice needs no PyTorch — only building a *new* one does.
+```sh
+./scripts/bootstrap.sh                 # all three engines, ~13 GB, nothing manual
+./scripts/bootstrap.sh --audio8-only   # stop after the first engine, ~4 GB
+```
+
+That is the whole setup. It checks the toolchain, downloads and converts all three
+checkpoints, fetches the fixtures, and builds; every step is skipped if its output already
+exists, so re-running costs nothing. The rest of this section is what it does on your behalf,
+for when a step fails or you want to do one by hand.
+
+Voice assets are already in the repo (`voices/`, ~200 KB), so cloning a voice needs no
+PyTorch — only building a *new* one does. **No engine needs its upstream repository**: the two
+CosyVoice artifacts that cannot be derived without one are fetched as assets.
 
 | level | you get | needs |
 |---|---|---|

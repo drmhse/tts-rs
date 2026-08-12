@@ -4,9 +4,12 @@
 # ---------------------------------------------------------------- model weights
 #
 # Converted checkpoints, several GB each. `scripts/bootstrap.sh` regenerates them from
-# the upstream models; see docs/setup.md. Never commit these — the licences belong to
+# the upstream models; see docs/reference.md. Never commit these — the licences belong to
 # the upstream model authors, not to this repo.
 /references/*/weights/
+
+# Raw upstream checkpoints, downloaded by bootstrap.sh and deleted once converted.
+/references/*/download/
 
 # ---------------------------------------------------------------- fixtures
 #

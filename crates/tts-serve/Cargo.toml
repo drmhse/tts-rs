@@ -9,8 +9,8 @@ name = "tts-serve"
 path = "src/main.rs"
 
 [dependencies]
-tts-core = { path = "../tts-core" }
-tts-engines = { path = "../tts-engines" }
+tts-core = { path = "../tts-core", default-features = false }
+tts-engines = { path = "../tts-engines", default-features = false }
 anyhow = { workspace = true }
 clap = { workspace = true }
 axum = "0.7"

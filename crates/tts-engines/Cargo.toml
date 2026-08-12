@@ -6,10 +6,10 @@ license.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-tts-core = { path = "../tts-core" }
-audio8 = { path = "../audio8" }
-cosyvoice = { path = "../cosyvoice" }
-qwen3tts = { path = "../qwen3tts" }
+tts-core = { path = "../tts-core", default-features = false }
+audio8 = { path = "../audio8", default-features = false }
+cosyvoice = { path = "../cosyvoice", default-features = false }
+qwen3tts = { path = "../qwen3tts", default-features = false }
 
 [features]
 default = ["metal"]

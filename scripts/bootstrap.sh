@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
 #
-# Get this repo from a fresh clone to a working `tts speak`.
+# From a fresh clone to all three engines working. Nothing here is manual.
 #
 # What it does:
 #   1. checks the toolchain and the platform
 #   2. downloads the Audio8 checkpoint (~2.4 GB) from Hugging Face
 #   3. creates references/audio8/.venv and folds the codec's weight_norm into safetensors
-#   4. fetches the derived assets (~130 MB): the fixture oracles for all three gates, and
+#   4. downloads and converts the CosyVoice and Qwen3-TTS checkpoints (~8 GB together)
+#   5. fetches the derived assets (~130 MB): the fixture oracles for all three gates, and
 #      the two CosyVoice artifacts that need the upstream python package to produce
+#   6. builds the workspace
 #
-# What it deliberately does *not* do: download the CosyVoice and Qwen3-TTS checkpoints.
-# Those are gigabytes each and only two of the three engines need them, so `docs/reference.md#setup`
-# has the commands and you choose. CosyVoice no longer needs the upstream *repository*
-# though — step 4 fetches the two artifacts that used to require it.
+# Budget ~13 GB of disk and a long first run; almost all of it is download. Pass
+# --audio8-only to stop after the first engine, which needs ~4 GB.
+#
+# No engine needs its upstream *repository* any more. CosyVoice's two un-derivable
+# artifacts are fetched in step 5, so converting its checkpoint is a plain `torch.load`
+# under the venv this script already built.
 #
 # Re-running is safe: every step is skipped if its output already exists. Pass --force
-# to redo the conversion.
+# to redo the codec conversion, or --audio8-only to skip the other two engines.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -104,6 +108,53 @@ else
   ( cd "$ROOT/references/audio8" && .venv/bin/python convert_codec.py --weights weights --out weights/codec.safetensors )
 fi
 
+# ------------------------------------------------- 4b. CosyVoice and Qwen3-TTS checkpoints
+#
+# Both are plain downloads plus, for CosyVoice, a `torch.load` re-serialisation. Neither
+# needs its upstream repo: the two artifacts that used to require one are fetched in step 5.
+# Skipped entirely with --audio8-only, since together they are another ~8 GB.
+
+COSY_W="$ROOT/references/cosyvoice/weights"
+QWEN_W="$ROOT/references/qwen3tts/weights"
+
+if [ "$FORCE" = "--audio8-only" ]; then
+  say "Skipping CosyVoice and Qwen3-TTS (--audio8-only)"
+else
+  if [ -f "$COSY_W/llm.safetensors" ]; then
+    say "CosyVoice checkpoint already converted — skipping"
+  else
+    say "Downloading Fun-CosyVoice3-0.5B (~4 GB) and converting it"
+    need_python
+    "$VENV/bin/python" - <<'PYEOF'
+from huggingface_hub import snapshot_download
+snapshot_download("FunAudioLLM/Fun-CosyVoice3-0.5B", local_dir="references/cosyvoice/download")
+PYEOF
+    "$VENV/bin/python" "$ROOT/references/cosyvoice/convert.py" \
+        --checkpoints "$ROOT/references/cosyvoice/download" --out "$COSY_W"
+    # The .pt files are 4 GB and nothing reads them after conversion.
+    if [ -f "$COSY_W/llm.safetensors" ]; then
+      say "Removing the raw CosyVoice download (4 GB, no longer needed)"
+      rm -rf "$ROOT/references/cosyvoice/download"
+    fi
+  fi
+
+  if [ -f "$QWEN_W/model.safetensors" ]; then
+    say "Qwen3-TTS checkpoint already present — skipping"
+  else
+    say "Downloading Qwen3-TTS-12Hz-1.7B-Base (~4.3 GB)"
+    mkdir -p "$QWEN_W/speech_tokenizer"
+    B=https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base/resolve/main
+    for f in config.json generation_config.json preprocessor_config.json \
+             tokenizer_config.json vocab.json merges.txt model.safetensors; do
+      curl -fsSL -C - -o "$QWEN_W/$f" "$B/$f" || die "failed to download $f"
+    done
+    for f in config.json configuration.json preprocessor_config.json model.safetensors; do
+      curl -fsSL -C - -o "$QWEN_W/speech_tokenizer/$f" "$B/speech_tokenizer/$f" \
+        || die "failed to download speech_tokenizer/$f"
+    done
+  fi
+fi
+
 # ------------------------------------------------------------------ 5. derived assets
 
 # The fixture oracles and the two CosyVoice artifacts that need the upstream python package.
@@ -119,12 +170,15 @@ say "Fetching the derived assets"
 say "Building the workspace"
 cargo build --release
 
-say "Done. Audio8 is ready:"
+say "Done."
 cat <<'EOF'
 
     cargo run -p tts-cli --release -- speak \
         --engine audio8 --voice voices/cosy-default \
         --text "Hello from a fresh checkout." --out hello.wav
+
+    cargo run -p tts-cli --release -- engines      # all three, and what each supports
+    ./scripts/gates.sh                             # everything verifiable
 EOF
 
 # Report what is actually still missing rather than assuming a fresh machine. After the asset

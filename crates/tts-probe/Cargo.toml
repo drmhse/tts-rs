@@ -8,11 +8,11 @@ license.workspace = true
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
 anyhow = { workspace = true }
-tts-bench = { path = "../tts-bench" }
-audio8 = { path = "../audio8" }
-cosyvoice = { path = "../cosyvoice" }
-tts-core = { path = "../tts-core" }
-tts-nn = { path = "../tts-nn" }
+tts-bench = { path = "../tts-bench", default-features = false }
+audio8 = { path = "../audio8", default-features = false }
+cosyvoice = { path = "../cosyvoice", default-features = false }
+tts-core = { path = "../tts-core", default-features = false }
+tts-nn = { path = "../tts-nn", default-features = false }
 
 [features]
 default = ["metal"]

@@ -7,8 +7,8 @@ license.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
-tts-core = { path = "../tts-core" }
-tts-engines = { path = "../tts-engines" }
+tts-core = { path = "../tts-core", default-features = false }
+tts-engines = { path = "../tts-engines", default-features = false }
 candle-core = { workspace = true }
 
 [features]

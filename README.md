@@ -11,15 +11,17 @@ guarantee rather than a deployment target — Audio8 measures RTF 2.151 on CPU a
 Metal, and it is the codec that suffers most (1.235 of it, against 0.214 on Metal).
 
 ```sh
-./scripts/bootstrap.sh          # toolchain, checkpoint, assets, build
+./scripts/bootstrap.sh          # toolchain, all three checkpoints, assets, build
 
 cargo run -p tts-cli --release -- speak \
     --engine audio8 --voice voices/cosy-default \
     --text "Hello from a fresh checkout." --out hello.wav
 ```
 
-`bootstrap.sh` sets up Audio8 and fetches the fixtures for all three gates. CosyVoice and
-Qwen3-TTS each need their own checkpoint downloaded — a few more commands, in
+One command, nothing manual: `bootstrap.sh` installs all three engines, their fixtures, and
+builds. Budget ~13 GB of disk and a long first run — almost all of it download. Pass
+`--audio8-only` to stop after the first engine, at ~4 GB. Every step is skipped if its output
+already exists, so re-running is cheap. Details in
 **[docs/reference.md](docs/reference.md#setup)**.
 
 ## What you can do with it
