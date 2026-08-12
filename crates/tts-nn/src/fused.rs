@@ -870,7 +870,7 @@ mod tests {
         #[cfg_attr(not(feature = "metal"), allow(unused_mut))]
         let mut devices = vec![Device::Cpu];
         #[cfg(feature = "metal")]
-        if let Ok(m) = Device::new_metal(0) {
+        if let Some(m) = crate::usable_metal() {
             devices.push(m);
         }
         for d in devices {

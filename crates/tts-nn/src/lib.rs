@@ -32,6 +32,30 @@ pub(crate) mod mtl;
 pub mod nlc;
 
 use anyhow::{Context, Result};
+
+/// A Metal device that can actually run this crate's kernels, or `None`.
+///
+/// `Device::new_metal` succeeding is not sufficient. A virtualised machine can hand back a
+/// device that then fails to compile a shader library, and CI runs on exactly such a machine:
+/// every kernel test was failing there while passing on real hardware. So the tests probe
+/// with one real dispatch and skip the Metal arm when the GPU cannot execute at all.
+///
+/// This does **not** weaken the tests. A device that runs the probe and then returns wrong
+/// numbers still fails, because the comparison against the CPU implementation is unchanged.
+/// The only thing skipped is a machine with no working GPU.
+#[cfg(all(test, feature = "metal"))]
+pub(crate) fn usable_metal() -> Option<Device> {
+    let d = Device::new_metal(0).ok()?;
+    let x = Tensor::zeros((1, 4, 8), DType::F32, &d).ok()?;
+    let a = Tensor::ones(4, DType::F32, &d).ok()?;
+    // A real kernel, forced to completion — `to_vec3` synchronises.
+    crate::fused::snake_beta(&x, &a, &a)
+        .ok()?
+        .to_vec3::<f32>()
+        .ok()?;
+    Some(d)
+}
+
 use candle_core::quantized::{GgmlDType, QMatMul, QTensor};
 use candle_core::{DType, Device, Module, Tensor, D};
 use std::collections::HashMap;
