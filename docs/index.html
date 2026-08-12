@@ -92,7 +92,8 @@
     1612 words of prose — <code>examples/chapter.txt</code> in the repo — rendered on one
     M4 / 16&nbsp;GB laptop, each engine in the configuration it ships in. These are the
     complete chapters — eleven to thirteen minutes each — in two voices, cloned from two
-    reference clips of about ten seconds. Fastest first.
+    reference clips of about ten seconds. Ordered by how they sound on this passage, best
+    first &mdash; a listening judgement, not a measured one, so trust your own ears over it.
   </p>
 
   <div class="engine">
@@ -118,27 +119,6 @@
 
   <div class="engine">
     <header>
-      <h3>audio8</h3>
-      <span class="tag">Audio8-TTS-Preview-0.6b · 601 M · 44.1 kHz</span>
-    </header>
-    <div class="voices">
-      <label>female</label>
-      <audio controls preload="none" src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-audio8.webm">
-        <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-audio8.webm">download</a>
-      </audio>
-      <label>male</label>
-      <audio controls preload="none" src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-audio8-male.webm">
-        <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-audio8-male.webm">download</a>
-      </audio>
-    </div>
-    <div class="stats">
-      <span>female <b>0.536</b> · 6m 12s → 11:34</span>
-      <span>male <b>0.527</b> · 5m 47s → 10:59</span>
-    </div>
-  </div>
-
-  <div class="engine">
-    <header>
       <h3>cosyvoice</h3>
       <span class="tag">Fun-CosyVoice3-0.5B · 995 M · 24 kHz</span>
     </header>
@@ -155,6 +135,27 @@
     <div class="stats">
       <span>female <b>0.718</b> · 9m 12s → 12:48</span>
       <span>male <b>0.703</b> · 8m 15s → 11:44</span>
+    </div>
+  </div>
+
+  <div class="engine">
+    <header>
+      <h3>audio8</h3>
+      <span class="tag">Audio8-TTS-Preview-0.6b · 601 M · 44.1 kHz</span>
+    </header>
+    <div class="voices">
+      <label>female</label>
+      <audio controls preload="none" src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-audio8.webm">
+        <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-audio8.webm">download</a>
+      </audio>
+      <label>male</label>
+      <audio controls preload="none" src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-audio8-male.webm">
+        <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-audio8-male.webm">download</a>
+      </audio>
+    </div>
+    <div class="stats">
+      <span>female <b>0.536</b> · 6m 12s → 11:34</span>
+      <span>male <b>0.527</b> · 5m 47s → 10:59</span>
     </div>
   </div>
 
@@ -229,8 +230,8 @@ curl -X POST localhost:3003/tts -H "X-API-Key: secret" \
     </thead>
     <tbody>
       <tr><td class="mono">qwen3tts</td><td class="num">0.252–0.261</td><td class="num">2m 40s</td><td>yes, at f16</td><td>you are narrating something long</td></tr>
-      <tr><td class="mono">audio8</td><td class="num">0.527–0.536</td><td class="num">5m 47s</td><td>no</td><td>you want 44.1 kHz output</td></tr>
       <tr><td class="mono">cosyvoice</td><td class="num">0.703–0.718</td><td class="num">8m 15s</td><td>no</td><td>you want the widest language coverage</td></tr>
+      <tr><td class="mono">audio8</td><td class="num">0.527–0.536</td><td class="num">5m 47s</td><td>no</td><td>you want 44.1 kHz output</td></tr>
     </tbody>
   </table>
   </div>
