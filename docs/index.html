@@ -46,7 +46,12 @@
   .engine header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .6rem; }
   .engine h3 { font-family: var(--mono); font-size: 1rem; margin: 0; }
   .tag { color: var(--muted); font-size: .85rem; }
-  audio { width: 100%; margin: .85rem 0 .6rem; }
+  audio { width: 100%; margin: .2rem 0 .7rem; }
+  .voices { margin: .8rem 0 .5rem; }
+  .voices label {
+    display: block; font-size: .75rem; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted); margin-top: .5rem;
+  }
   .stats { display: flex; flex-wrap: wrap; gap: 1.4rem; font-size: .875rem; color: var(--muted); }
   .stats b { color: var(--fg); font-family: var(--mono); font-weight: 600; }
 
@@ -85,8 +90,9 @@
   <h2>The same chapter, narrated by each engine</h2>
   <p class="caveat">
     1612 words of prose — <code>examples/chapter.txt</code> in the repo — rendered on one
-    M4 / 16&nbsp;GB laptop. Each engine runs in the configuration it ships in. Samples below
-    are the first 45 seconds; the full renders are linked beside them.
+    M4 / 16&nbsp;GB laptop, each engine in the configuration it ships in. These are the
+    complete chapters — eleven to thirteen minutes each — in two voices, cloned from two
+    reference clips of about ten seconds.
   </p>
 
   <div class="engine">
@@ -94,16 +100,19 @@
       <h3>audio8</h3>
       <span class="tag">Audio8-TTS-Preview-0.6b · 601 M · 44.1 kHz</span>
     </header>
-    <audio controls preload="none"
-      src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/sample-audio8.m4a">
-      Your browser cannot play audio inline —
-      <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/sample-audio8.m4a">download the sample</a>.
-    </audio>
+    <div class="voices">
+      <label>female</label>
+      <audio controls preload="none" src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-audio8.webm">
+        <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-audio8.webm">download</a>
+      </audio>
+      <label>male</label>
+      <audio controls preload="none" src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-audio8-male.webm">
+        <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-audio8-male.webm">download</a>
+      </audio>
+    </div>
     <div class="stats">
-      <span>RTF <b>0.536</b></span>
-      <span>rendered in <b>6m 12s</b></span>
-      <span>produced <b>11:34</b></span>
-      <span><a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-audio8.webm">full render</a></span>
+      <span>female <b>0.536</b> · 6m 12s → 11:34</span>
+      <span>male <b>0.527</b> · 5m 47s → 10:59</span>
     </div>
   </div>
 
@@ -112,16 +121,19 @@
       <h3>cosyvoice</h3>
       <span class="tag">Fun-CosyVoice3-0.5B · 995 M · 24 kHz</span>
     </header>
-    <audio controls preload="none"
-      src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/sample-cosyvoice.m4a">
-      Your browser cannot play audio inline —
-      <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/sample-cosyvoice.m4a">download the sample</a>.
-    </audio>
+    <div class="voices">
+      <label>female</label>
+      <audio controls preload="none" src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-cosyvoice.webm">
+        <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-cosyvoice.webm">download</a>
+      </audio>
+      <label>male</label>
+      <audio controls preload="none" src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-cosyvoice-male.webm">
+        <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-cosyvoice-male.webm">download</a>
+      </audio>
+    </div>
     <div class="stats">
-      <span>RTF <b>0.718</b></span>
-      <span>rendered in <b>9m 12s</b></span>
-      <span>produced <b>12:48</b></span>
-      <span><a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-cosyvoice.webm">full render</a></span>
+      <span>female <b>0.718</b> · 9m 12s → 12:48</span>
+      <span>male <b>0.703</b> · 8m 15s → 11:44</span>
     </div>
   </div>
 
@@ -130,16 +142,19 @@
       <h3>qwen3tts</h3>
       <span class="tag">Qwen3-TTS-12Hz-1.7B-Base · 2.10 B · 24 kHz · <code>--quant f16</code></span>
     </header>
-    <audio controls preload="none"
-      src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/sample-qwen3tts.m4a">
-      Your browser cannot play audio inline —
-      <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/sample-qwen3tts.m4a">download the sample</a>.
-    </audio>
+    <div class="voices">
+      <label>female</label>
+      <audio controls preload="none" src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-qwen3tts.webm">
+        <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-qwen3tts.webm">download</a>
+      </audio>
+      <label>male</label>
+      <audio controls preload="none" src="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-qwen3tts-male.webm">
+        <a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-qwen3tts-male.webm">download</a>
+      </audio>
+    </div>
     <div class="stats">
-      <span>RTF <b>0.261</b></span>
-      <span>rendered in <b>3m 2s</b></span>
-      <span>produced <b>11:36</b></span>
-      <span><a href="https://huggingface.co/datasets/drmhse/tts-rs-assets/resolve/main/samples/chapter-qwen3tts.webm">full render</a></span>
+      <span>female <b>0.261</b> · 3m 2s → 11:36</span>
+      <span>male <b>0.252</b> · 2m 40s → 10:34</span>
     </div>
   </div>
 
@@ -156,20 +171,21 @@ cargo run -p tts-cli --release -- speak --engine qwen3tts \
     --voice voices/cosy-default-qwen3tts --quant f16 \
     --text-file examples/chapter.txt --out chapter.wav</code></pre>
   <p class="caveat">
-    <code>bootstrap.sh</code> pulls the Audio8 checkpoint and the fixtures for all three
-    correctness gates. The other two checkpoints are a few more commands.
+    <code>bootstrap.sh</code> installs all three engines, their checkpoints and the fixtures
+    for the correctness gates — one command, nothing manual. Budget ~13&nbsp;GB of disk, or
+    pass <code>--audio8-only</code> to stop after the first engine at ~4&nbsp;GB.
   </p>
 
   <h2>How they compare</h2>
   <div class="scroll">
   <table>
     <thead>
-      <tr><th>engine</th><th>RTF</th><th>wall</th><th>batches</th><th>reach for it when</th></tr>
+      <tr><th>engine</th><th>RTF (both voices)</th><th>wall, fastest</th><th>batches</th><th>reach for it when</th></tr>
     </thead>
     <tbody>
-      <tr><td class="mono">audio8</td><td class="num">0.536</td><td class="num">6m 12s</td><td>no</td><td>you want 44.1 kHz output</td></tr>
-      <tr><td class="mono">cosyvoice</td><td class="num">0.718</td><td class="num">9m 12s</td><td>no</td><td>you want the widest language coverage</td></tr>
-      <tr><td class="mono">qwen3tts</td><td class="num">0.261</td><td class="num">3m 2s</td><td>yes, at f16</td><td>you are narrating something long</td></tr>
+      <tr><td class="mono">audio8</td><td class="num">0.527–0.536</td><td class="num">5m 47s</td><td>no</td><td>you want 44.1 kHz output</td></tr>
+      <tr><td class="mono">cosyvoice</td><td class="num">0.703–0.718</td><td class="num">8m 15s</td><td>no</td><td>you want the widest language coverage</td></tr>
+      <tr><td class="mono">qwen3tts</td><td class="num">0.252–0.261</td><td class="num">2m 40s</td><td>yes, at f16</td><td>you are narrating something long</td></tr>
     </tbody>
   </table>
   </div>

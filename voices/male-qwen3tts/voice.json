@@ -1,0 +1,10 @@
+{
+  "engine": "qwen3tts",
+  "name": "male-qwen3tts",
+  "text": "Hi there! We're introducing a new feature where I can read ideas and topics allowed with a natural, human-like voice. Before you get started, please take a moment to go over this important information.",
+  "seconds": 10.72,
+  "notes": null,
+  "enc_dim": 2048,
+  "frames": 134,
+  "codebooks": 16
+}
