@@ -84,16 +84,6 @@ the engines interleaved: `audio8` 0.554, `cosyvoice` 0.726, `qwen3tts` 0.665.
 - **A known performance regression, undiagnosed.** `audio8`'s codec and `cosyvoice`'s vocoder
   are 35% and 32% slower than when first measured, while every transformer stage is unchanged.
   Both are convolution-heavy; the cause is likely the channels-last conv path.
-- **Memory is not characterised.** One process renders 16 minutes of audio on a 16 GB machine
-  comfortably, and two engines do not fit at once. Beyond that, two attempts to measure it both
-  saturated, so there is no peak figure to quote.
-- **Speed varies with thermal state.** An M4 under sustained GPU load drifts up to 2×, so
-  measure on your own machine, idle, before planning around any number here. The protocol is
-  in [docs/reference.md](docs/reference.md#how-to-measure-without-fooling-yourself).
-- **`/tts/stream` is buffered**, not incremental — it returns the whole utterance. There is no
-  durable job queue and no forced-alignment endpoint; both answer `501`.
-- **Off Apple silicon it is correctness, not speed.** The CPU fallbacks are unit-tested against
-  the kernels, at RTF 2.151 for `audio8` against 0.554 on Metal.
 - **Sampled output is not reproducible across implementations**, because the reference draws
   from torch's RNG. Pass a `seed` for repeatability within this port; use the greedy path if
   you need to compare against PyTorch.
@@ -123,7 +113,7 @@ curl -X POST localhost:3003/tts -H "X-API-Key: secret" \
 | `POST /tts/stream` | same, buffered rather than incremental |
 | `GET /v1/capabilities` | engines, sample rates, and the weight formats each supports |
 | `GET /health` | liveness |
-| `GET /` | lists the live routes **and** the unimplemented ones |
+| `GET /` | lists the live routes **and** the unimplemented ones, which answer `501` |
 
 **Every response carries its own cost.** `x-audio-seconds`, `x-wall-seconds`, `x-rtf`, and
 `x-stages` with the per-stage split (`llm=10.296,flow=25.129,vocoder=2.898`), so a client sees
