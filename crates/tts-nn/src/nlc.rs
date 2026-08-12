@@ -180,6 +180,7 @@ mod tests {
     /// arithmetic in a different layout, so the bound is tight.
     #[test]
     fn matches_channel_major() -> Result<()> {
+        #[cfg_attr(not(feature = "metal"), allow(unused_mut))]
         let mut devices = vec![Device::Cpu];
         #[cfg(feature = "metal")]
         if let Ok(d) = Device::new_metal(0) {

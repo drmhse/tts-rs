@@ -10,6 +10,7 @@
 //! Both entry points fall back to the composed candle form off Metal, and the unit tests
 //! check the kernels against exactly that form.
 
+#[cfg(feature = "metal")]
 use crate::mtl;
 use candle_core::{CpuStorage, CustomOp1, Layout, Result, Shape, Tensor};
 
@@ -683,6 +684,7 @@ pub fn snake_beta(x: &Tensor, alpha: &Tensor, beta_recip: &Tensor) -> Result<Ten
 
 /// Shared shape for the two `[b, n, d]`-against-`[b, 1, d]` kernels.
 struct Bcast3 {
+    #[cfg_attr(not(feature = "metal"), allow(dead_code))]
     kernel: &'static str,
     label: &'static str,
     n: usize,
@@ -865,6 +867,7 @@ mod tests {
     /// here are the codec's own (1536 channels, a chunk's worth of samples).
     #[test]
     fn snake_beta_matches_composed() -> anyhow::Result<()> {
+        #[cfg_attr(not(feature = "metal"), allow(unused_mut))]
         let mut devices = vec![Device::Cpu];
         #[cfg(feature = "metal")]
         if let Ok(m) = Device::new_metal(0) {

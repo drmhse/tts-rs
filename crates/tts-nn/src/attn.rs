@@ -8,9 +8,12 @@
 //! a single kernel, and splitting keeps both of these free of threadgroup memory and cross-lane
 //! reductions. See `docs/reference.md#what-did-not-work` for the cheaper fix that failed.
 
+#[cfg(feature = "metal")]
 use crate::mtl;
 use anyhow::Result as AnyResult;
-use candle_core::{CpuStorage, DType, Layout, Shape, Tensor};
+#[cfg(feature = "metal")]
+use candle_core::DType;
+use candle_core::{CpuStorage, Layout, Shape, Tensor};
 
 /// `q` is `[b, n_kv, gqa, head_dim]`, the cache `[b, n_kv, capacity, head_dim]`.
 ///

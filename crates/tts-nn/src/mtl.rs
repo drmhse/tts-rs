@@ -15,6 +15,7 @@
 //! The kernels live in one source string compiled once per device, because compiling a
 //! library costs milliseconds and these run hundreds of times per utterance.
 
+#[cfg(feature = "metal")]
 use candle_core::Result;
 
 #[cfg(feature = "metal")]
