@@ -77,31 +77,6 @@ running on MPS too.
 Short-passage figures, for comparison — `examples/senior.txt`, 132 words, median of five with
 the engines interleaved: `audio8` 0.554, `cosyvoice` 0.726, `qwen3tts` 0.665.
 
-### How it validates
-
-```sh
-./scripts/gates.sh          # skips any tier whose inputs are missing, never silently passes
-```
-
-| gate | |
-|---|---|
-| `audio8` | 8 checks; greedy generation **bit-identical** to the reference |
-| `cosyvoice` | 27 checks; teacher-forced argmax **105/105 identical**; WER 0.000–0.015 |
-| `qwen3tts` | 65 rows; argmax codebook 0 identical, predictor **15/15** |
-
-Fixtures are per stage, so a failure localises to a stage rather than to "the audio sounds
-wrong". That is what made Audio8's codec validate at 2.8e-6 first try and localised CosyVoice's
-reversed RoPE convention to one line.
-
-Sampled output is deliberately **not** gated on equality: `ras_sampling` draws from torch's
-generator, so a free-running sequence is not reproducible across implementations. The gates
-check prefill logits and a greedy rollout; quality is checked separately by WER.
-
-Gating per stage also turned up two bugs in the references themselves — Audio8's sampler is
-unusable under its own default dtype, and CosyVoice's harmonic phase is numerically degenerate
-in f32. Both, and the seventeen traps that cost real time, are in
-[docs/reference.md](docs/reference.md#porting-traps).
-
 ## Limitations
 
 - **Ten languages on `qwen3tts`**, a closed list: en, de, es, zh, ja, fr, ko, ru, it, pt. Text
