@@ -97,38 +97,35 @@ Sampled output is deliberately **not** gated on equality: `ras_sampling` draws f
 generator, so a free-running sequence is not reproducible across implementations. The gates
 check prefill logits and a greedy rollout; quality is checked separately by WER.
 
-## Honest limitations
+Gating per stage also turned up two bugs in the references themselves — Audio8's sampler is
+unusable under its own default dtype, and CosyVoice's harmonic phase is numerically degenerate
+in f32. Both, and the seventeen traps that cost real time, are in
+[docs/reference.md](docs/reference.md#porting-traps).
 
-Read this before quoting any number above.
+## Limitations
 
-- **Two stages regressed and it is not diagnosed.** `audio8`'s codec is 35% slower than when
-  first measured and `cosyvoice`'s vocoder 32%, while every transformer stage is within 1%.
-  Both are convolution-heavy. This is why `audio8` reads 0.554 where this README once
-  claimed 0.499.
-- **`cosyvoice`'s speedup over PyTorch is 1.05×, not 6×.** Stock upstream measures 4.370 here,
-  but only because `CosyVoiceModel` hardcodes `cuda if available else cpu` and has no MPS path
-  at all, so CPU is all it can do. The adapted MPS service reaches ~0.76. The 6× figure is
-  real and useless.
-- **Memory is not characterised.** An earlier claim here that it was "flat by construction" was
-  wrong, and two attempts to measure it both saturated. What can be said: one process renders
-  16 minutes of audio on a 16 GB machine without the system struggling, and two concurrent
-  engines do not fit.
-- **Timings on this hardware need a statement of what else was running.** An M4 under sustained
-  GPU load drifts ~2×, which once silently invalidated a session of measurements, and an
-  unsynchronised stage timer once misattributed 13% of a pipeline to the wrong stage. The
-  protocol that catches both is in
-  [docs/reference.md](docs/reference.md#how-to-measure-without-fooling-yourself).
-- **No durable job queue and no forced alignment** in `tts-serve`. Both answer `501` rather
-  than pretending.
+- **Ten languages on `qwen3tts`**, a closed list: en, de, es, zh, ja, fr, ko, ru, it, pt. Text
+  outside it has no faithful path through that engine.
+- **A known performance regression, undiagnosed.** `audio8`'s codec and `cosyvoice`'s vocoder
+  are 35% and 32% slower than when first measured, while every transformer stage is unchanged.
+  Both are convolution-heavy; the cause is likely the channels-last conv path.
+- **Memory is not characterised.** One process renders 16 minutes of audio on a 16 GB machine
+  comfortably, and two engines do not fit at once. Beyond that, two attempts to measure it both
+  saturated, so there is no peak figure to quote.
+- **Speed varies with thermal state.** An M4 under sustained GPU load drifts up to 2×, so
+  measure on your own machine, idle, before planning around any number here. The protocol is
+  in [docs/reference.md](docs/reference.md#how-to-measure-without-fooling-yourself).
+- **`/tts/stream` is buffered**, not incremental — it returns the whole utterance. There is no
+  durable job queue and no forced-alignment endpoint; both answer `501`.
+- **Off Apple silicon it is correctness, not speed.** The CPU fallbacks are unit-tested against
+  the kernels, at RTF 2.151 for `audio8` against 0.554 on Metal.
+- **Sampled output is not reproducible across implementations**, because the reference draws
+  from torch's RNG. Pass a `seed` for repeatability within this port; use the greedy path if
+  you need to compare against PyTorch.
 
-Two bugs in the references, worth knowing if you are porting these models yourself. **Audio8's
-sampler is broken under its own default dtype** — `_sample` draws Gumbel noise at
-`dtype=probabilities.dtype`, so in bfloat16 the uniforms have ~256 distinct values and output
-is unintelligible and never reaches EOS; both implementations here draw in f32. And
-**CosyVoice's harmonic phase is numerically degenerate in f32** — the reference accumulates
-phase to 1.7e7 radians, where one f32 ulp is a full radian, so this port accumulates on the
-host in f64 modulo one cycle. That is the only place either port is deliberately more accurate
-than its reference, and it moves *closer* to the reference's output.
+One comparison worth not making: `cosyvoice` looks 6× faster than its PyTorch reference, but
+only because upstream hardcodes `cuda if available else cpu` and has no MPS path, so CPU is all
+it can do. Against a service that does use MPS it is ahead by about 5%.
 
 ## Serving it as an HTTP API
 
