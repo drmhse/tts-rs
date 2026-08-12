@@ -44,7 +44,7 @@ pub mod llm {
     pub const TASK_ID: usize = SPEECH_TOKENS + 2; // 6563
 
     /// `<|endofprompt|>`. The LLM asserts this appears in the concatenated prompt text;
-    /// see trap 2 in `docs/porting/cosyvoice.md`.
+    /// see trap 2 in `docs/reference.md#porting-traps`.
     pub const ENDOFPROMPT: u32 = 151_646;
 
     /// `ras_sampling(top_p=0.8, top_k=25, win_size=10, tau_r=0.1)`.
@@ -118,7 +118,7 @@ pub mod hift {
     pub const LRELU_SLOPE: f64 = 0.1;
     /// The slope of the leaky-ReLU immediately before `conv_post`, which the reference
     /// writes as a bare `F.leaky_relu(x)` — so it takes torch's default 0.01, not the
-    /// configured 0.1. See trap 7 in `docs/porting/cosyvoice.md`.
+    /// configured 0.1. See trap 7 in `docs/reference.md#porting-traps`.
     pub const LRELU_SLOPE_POST: f64 = 0.01;
     pub const AUDIO_LIMIT: f64 = 0.99;
     /// `conv_pre` looks 4 frames forward.

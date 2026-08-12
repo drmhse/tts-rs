@@ -1,6 +1,6 @@
 //! Re-examining conv-as-GEMM with the *other* im2col layout.
 //!
-//! `docs/performance/candle-on-metal.md` Finding 1 refuted conv-as-GEMM and attributed the loss to
+//! `docs/reference.md#performance` Finding 1 refuted conv-as-GEMM and attributed the loss to
 //! materialisation traffic: "the `[131072, 672]` matrix is 352 MB to write and 352 MB to read
 //! back ... That traffic exceeds what the better GEMM shape saves."
 //!

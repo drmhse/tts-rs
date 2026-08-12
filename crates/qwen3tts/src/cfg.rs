@@ -125,7 +125,7 @@ pub mod talker {
     /// `get_rope_index` builds all three sections from the same `cumsum(mask) - 1`, so
     /// `apply_interleaved_rope` returns `x[0]` unchanged and what reaches `rotate_half` is
     /// ordinary half-split RoPE. Kept as a constant because the config is the first thing a
-    /// reader checks. Trap 1 in `docs/porting/qwen3tts.md`.
+    /// reader checks. Trap 1 in `docs/reference.md#porting-traps`.
     pub const MROPE_SECTION: [usize; 3] = [24, 20, 20];
 
     /// Dead: no uses in the reference, and 13 is not this model's frame rate anyway.

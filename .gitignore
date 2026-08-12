@@ -43,6 +43,11 @@ __pycache__/
 /narration/
 /narration-*/
 
+# Source markdown staged for a narration run. `examples/chapter.txt` is the one excerpt
+# that is tracked, deliberately, as a benchmark fixture; the working directories are not.
+/prep-handbook/
+/prep-*/
+
 # macOS
 .DS_Store
 

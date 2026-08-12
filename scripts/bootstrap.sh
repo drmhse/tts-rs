@@ -6,11 +6,13 @@
 #   1. checks the toolchain and the platform
 #   2. downloads the Audio8 checkpoint (~2.4 GB) from Hugging Face
 #   3. creates references/audio8/.venv and folds the codec's weight_norm into safetensors
+#   4. fetches the derived assets (~130 MB): the fixture oracles for all three gates, and
+#      the two CosyVoice artifacts that need the upstream python package to produce
 #
-# What it deliberately does *not* do: set up CosyVoice. That engine needs the upstream
-# CosyVoice repository and its own python 3.10 environment, because converting its
-# checkpoints and dumping its fixtures import CosyVoice model code. `docs/setup.md`
-# has those steps; they are a handful of commands but they are not ours to automate.
+# What it deliberately does *not* do: download the CosyVoice and Qwen3-TTS checkpoints.
+# Those are gigabytes each and only two of the three engines need them, so `docs/reference.md#setup`
+# has the commands and you choose. CosyVoice no longer needs the upstream *repository*
+# though — step 4 fetches the two artifacts that used to require it.
 #
 # Re-running is safe: every step is skipped if its output already exists. Pass --force
 # to redo the conversion.
@@ -102,7 +104,17 @@ else
   ( cd "$ROOT/references/audio8" && .venv/bin/python convert_codec.py --weights weights --out weights/codec.safetensors )
 fi
 
-# ------------------------------------------------------------------ 5. build
+# ------------------------------------------------------------------ 5. derived assets
+
+# The fixture oracles and the two CosyVoice artifacts that need the upstream python package.
+# Cheap (~130 MB) and it is what lets ./scripts/gates.sh run without any PyTorch, so do it
+# unconditionally rather than making the gates the user's problem later.
+say "Fetching the derived assets"
+"$ROOT/scripts/fetch-assets.sh" || warn "asset fetch failed — the gates will report themselves
+   skipped, and CosyVoice will not start. Rerun ./scripts/fetch-assets.sh, or regenerate
+   from source: docs/reference.md#setup."
+
+# ------------------------------------------------------------------ 6. build
 
 say "Building the workspace"
 cargo build --release
@@ -115,30 +127,25 @@ cat <<'EOF'
         --text "Hello from a fresh checkout." --out hello.wav
 EOF
 
-# Report what is actually still missing rather than assuming a fresh machine.
+# Report what is actually still missing rather than assuming a fresh machine. After the asset
+# fetch the only things that can be absent are the two checkpoints nobody can download for
+# you — so name those, not the fixtures.
 missing=0
-if [ ! -d "$ROOT/references/cosyvoice/weights" ] \
-   || [ ! -f "$ROOT/references/cosyvoice/weights/rand_noise.safetensors" ]; then
-  printf '\n  * CosyVoice is not set up — it needs the upstream repo. See docs/setup.md §2\n'
+if [ ! -f "$ROOT/references/cosyvoice/weights/llm.safetensors" ]; then
+  printf '\n  * CosyVoice has no checkpoint — download Fun-CosyVoice3-0.5B and convert it.\n'
+  printf '    See docs/reference.md#setup. Its other assets are already fetched.\n'
   missing=1
 fi
-if [ ! -f "$ROOT/fixtures/audio8/oracle.safetensors" ]; then
-  printf '  * The Audio8 fixture gate has no fixtures. See docs/setup.md §3\n'
+if [ ! -f "$ROOT/references/qwen3tts/weights/model.safetensors" ]; then
+  printf '  * Qwen3-TTS has no checkpoint — see docs/reference.md#setup.\n'
   missing=1
 fi
-if [ ! -f "$ROOT/fixtures/cosyvoice/oracle.safetensors" ]; then
-  printf '  * The CosyVoice fixture gate has no fixtures. See docs/setup.md §3\n'
-  missing=1
-fi
-if [ ! -d "$ROOT/references/qwen3tts/weights" ] \
-   || [ ! -f "$ROOT/references/qwen3tts/weights/model.safetensors" ]; then
-  printf '  * Qwen3-TTS is not set up — it needs its own checkpoint and venv. See docs/setup.md\n'
-  missing=1
-fi
-if [ ! -f "$ROOT/fixtures/qwen3tts/oracle.safetensors" ]; then
-  printf '  * The Qwen3-TTS fixture gate has no fixtures (the shape audit still runs).\n'
-  missing=1
-fi
-[ "$missing" -eq 0 ] && printf '\nEverything else is present too — both engines and both fixture gates.\n'
+for e in audio8 cosyvoice qwen3tts; do
+  if [ ! -f "$ROOT/fixtures/$e/oracle.safetensors" ]; then
+    printf '  * The %s fixture gate has no fixtures — rerun ./scripts/fetch-assets.sh\n' "$e"
+    missing=1
+  fi
+done
+[ "$missing" -eq 0 ] && printf '\nEverything else is present too — all three engines and all three fixture gates.\n'
 
 printf '\nVerify with:  ./scripts/gates.sh\n'

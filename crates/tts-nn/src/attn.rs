@@ -6,7 +6,7 @@
 //!
 //! Two kernels rather than one fused flash-style pass: candle's `softmax_last_dim` is already
 //! a single kernel, and splitting keeps both of these free of threadgroup memory and cross-lane
-//! reductions. See `docs/rejected/padded-decode-attention.md` for the cheaper fix that failed.
+//! reductions. See `docs/reference.md#what-did-not-work` for the cheaper fix that failed.
 
 use crate::mtl;
 use anyhow::Result as AnyResult;

@@ -26,7 +26,7 @@
 //! # Traps
 //!
 //! All silent. Found by reading the reference and auditing shapes before writing any port.
-//! Full detail with reference line numbers in `docs/porting/qwen3tts.md`.
+//! Full detail with reference line numbers in `docs/reference.md#porting-traps`.
 //!
 //! 1. **M-RoPE is configured and unused.** `get_rope_index` gives all three sections the
 //!    same `cumsum(mask) - 1`, so `apply_interleaved_rope` is identity and the result is
@@ -59,7 +59,7 @@
 //!
 //! **q8_0 is the default weight format here, unlike the other two engines.** f32 measured
 //! 1994 ms/frame against q8_0's 52 ms — memory pressure, not arithmetic. See
-//! `docs/porting/qwen3tts.md`.
+//! `docs/reference.md#porting-traps`.
 
 pub mod cfg;
 pub mod codec;

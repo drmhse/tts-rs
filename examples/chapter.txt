@@ -1,0 +1,147 @@
+Why this concept changes preparation.
+
+You can be good at the job and still fail the interview.
+
+That is not a comforting slogan. It is the first practical fact this handbook has to respect. Senior software engineering work happens over months and years: ambiguous requirements, designs that survive review, migrations that do not break customers, incidents that change how a team operates, code that other people can maintain, and decisions that look better or worse only after production reality pushes back.
+
+An interview sees almost none of that directly. It sees a short sample: forty five minutes of coding, an hour of system design, a project story, a behavioral conversation, a debugging exercise, a resume screen, or a hiring manager discussion. Someone else chooses the prompt, controls the clock, and later turns visible behavior into a debrief.
+
+Preparation changes once you accept that an interview is a sampled performance. The goal is not to become a theatrical version of yourself. The goal is to stop losing evidence. If you have judgment, the interviewer must be able to see it. If you see a trade off, you must name it. If you would test a boundary, recover from a mistake, watch an operational risk, or negotiate scope in real work, you need a way to make that behavior visible inside the artificial format.
+
+Core premise.
+
+The interview does not measure your whole engineering life. It samples observable evidence under constraint. Preparation is the work of making the right evidence visible without becoming scripted or shallow.
+
+A continuous engineering performance line passes through several narrow interview windows, with a magnified sample showing which evidence becomes visible.
+
+A senior interview samples visible evidence. Preparation reduces signal loss between real ability and what the interviewer can score.
+
+The sampled performance model.
+
+Every round has the same basic shape:
+
+The company chooses a sampling window.
+
+You receive an incomplete prompt.
+
+You form a model of the problem, role expectation, and scoring context.
+
+You produce observable work: code, diagrams, decisions, questions, trade offs, stories, tests, corrections, and reflections.
+
+The interviewer maps that behavior to level signals.
+
+A debrief compares the evidence with the role's bar.
+
+You do not control the whole pipeline. You cannot choose the interviewer, the exact prompt, the rubric, or the hiring committee's mood. But you do control a large part of the middle: how quickly you frame the problem, how clearly you expose reasoning, how deliberately you choose depth, and how calmly you update when new information appears.
+
+This is why experienced engineers sometimes underperform. They may have the judgment, but the sample captures the wrong slice. They solve before clarifying. They make good assumptions silently. They draw components before stating requirements. They mention ownership without evidence. They handle a hint as if it were a verdict. They know a system's risk in real life, but in the interview they leave that risk unstated.
+
+The sampled performance model turns preparation from trivia accumulation into evidence design.
+
+How the model appears across rounds.
+
+The same principle appears differently in each part of the loop.
+
+Resume and recruiter screen. What the interviewer can actually sample: Role fit, scope, trajectory, clarity, constraints, and compensation alignment. Common signal loss: Strong experience is buried under generic bullets or unfocused positioning.
+
+Coding. What the interviewer can actually sample: Problem framing, implementation fluency, correctness, testing, and recovery. Common signal loss: The candidate writes code but hides invariants, edge cases, or debugging process.
+
+System design. What the interviewer can actually sample: Requirements, architecture, trade offs, bottlenecks, failure handling, and communication. Common signal loss: The candidate lists components before showing how choices follow from constraints.
+
+Practical coding. What the interviewer can actually sample: Codebase navigation, API design, debugging, refactoring, and maintainability. Common signal loss: The candidate changes code without showing boundaries, tests, or design intent.
+
+Project deep dive. What the interviewer can actually sample: Ownership, technical depth, judgment, impact, and reflection. Common signal loss: The candidate narrates chronology instead of decisions, alternatives, and consequences.
+
+Behavioral leadership. What the interviewer can actually sample: Influence, conflict handling, mentoring, accountability, and learning. Common signal loss: The candidate states values without showing observable behavior.
+
+The interview is not asking you to become a different engineer in each round. It is asking you to expose the same senior qualities through different surfaces.
+
+This handbook is organized around that idea. Some chapters teach the surfaces: resumes, coding rounds, design conversations, project deep dives, behavioral interviews. Some teach the underlying judgment: problem framing, trade offs, systems foundations, production risk, leadership, and delivery. The point is to make the connection explicit so preparation does not become a disconnected pile of practice topics.
+
+Examples and counterexamples.
+
+Consider a system design prompt:
+
+"Design a system that sends transactional notifications to users."
+
+A capable engineer might immediately draw an API, notification service, queue, workers, database, and email provider. Those components may be reasonable. But if the answer starts there, the sample is thin. The interviewer sees vocabulary and architecture shape, but may not see whether the candidate understands reliability, consent, urgency, user preferences, provider failure, abuse, auditability, or operational ownership.
+
+A stronger opening is smaller and more revealing:
+
+"Before drawing components, I want to know whether these are transactional messages like password resets and receipts, or engagement messages like promotions. That changes latency, consent, unsubscribe behavior, delivery guarantees, and audit needs. I will assume transactional messages unless you want the broader platform."
+
+The second answer has not solved the system yet. It has done something more important for the first minute of the sample: it made judgment visible.
+
+The same pattern appears in project stories. A weak version says:
+
+"I improved reliability by adding retries and monitoring."
+
+A stronger version says:
+
+"The visible symptom was delayed invoices near month end, but the cause was retry traffic sharing capacity with new work. We temporarily added workers, but the durable fix was isolating retries, making invoice writes idempotent, and adding an SLO for completion time. The next provider slowdown degraded tax enrichment without blocking the whole invoice pipeline."
+
+The difference is not senior sounding language. The difference is inspectable evidence: symptom versus cause, temporary mitigation versus durable fix, data, trade off, mechanism, and outcome.
+
+Decisions this chapter changes.
+
+If the interview is a sampled performance, several preparation decisions become clearer.
+
+First, do not prepare only by topic. Prepare by signal. "I studied queues" is weaker than "I can explain when a queue solves backpressure, when it hides latency, how retries stay idempotent, and what operators need to see when consumers fall behind."
+
+Second, do not practice only success paths. Senior interviews often turn on recovery: a failed test, a missed requirement, a new constraint, a challenge from the interviewer, or a project decision that had a real downside. Practice should include correction without defensiveness.
+
+Third, do not treat communication as polish added after technical work. Communication is part of the work being sampled. A silent good decision is almost indistinguishable from no decision at all.
+
+Fourth, do not let one strength crowd out the rest. A strong algorithm answer does not fully compensate for weak problem framing. A beautiful architecture diagram does not compensate for no failure model. A compelling project story loses force if ownership, trade offs, and lessons are vague.
+
+The book will keep returning to this question:
+
+What evidence did you make visible, and what evidence stayed hidden?
+
+Diagnostic self check.
+
+Use this quick diagnostic before choosing a preparation route.
+
+Can you explain your target role and level in two sentences? If the answer is no, the likely preparation need is: Positioning and role calibration.
+
+Can you turn an ambiguous prompt into goals, constraints, and assumptions before solving? If the answer is no, the likely preparation need is: Problem framing practice.
+
+Can you narrate a coding solution without hiding invariants, tests, or recovery? If the answer is no, the likely preparation need is: Coding round operating rhythm.
+
+Can you make a system design evolve from requirements rather than from a memorized diagram? If the answer is no, the likely preparation need is: Design method and systems foundations.
+
+Can you tell project stories around decisions, alternatives, impact, and reflection? If the answer is no, the likely preparation need is: Project deep dive preparation.
+
+Can you show leadership without relying on titles or personality claims? If the answer is no, the likely preparation need is: Behavioral evidence design.
+
+Can you recover visibly when corrected? If the answer is no, the likely preparation need is: Mock practice with feedback and time pressure.
+
+You do not need every answer to be perfect before continuing. You need enough honesty to stop preparing in the wrong shape.
+
+Field reference.
+
+The sampled performance rule
+
+The interview sees a short sample, not your whole career.
+
+Your job is to make relevant judgment visible under constraint.
+
+Clarify before solving.
+
+State assumptions, trade offs, and reversal conditions.
+
+Show testing, failure modes, operations, and scope control when relevant.
+
+In stories, expose decisions, alternatives, consequences, and reflection.
+
+Treat hints as information that improves the sample.
+
+After each practice round, ask: what did the interviewer actually see?
+
+Where the book goes next.
+
+This chapter gives the lens. The next chapter turns it on you.
+
+Before you decide whether to grind algorithms, schedule mocks, rewrite your resume, study distributed systems, or practice behavioral stories, you need a baseline. Not a vague feeling that you are "weak at interviews," and not a generic plan copied from someone else's timeline. You need to know which signals are already visible, which are hidden, and which ones matter most for the roles you are targeting.
+
+That is the job of Chapter 2: build a diagnostic that makes your preparation route honest.

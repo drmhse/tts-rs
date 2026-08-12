@@ -98,7 +98,21 @@ def export_tokenizer(src: Path, out_dir: Path) -> None:
     if not (tok_dir / "vocab.json").is_file():
         print(f"[skip] no tokenizer at {tok_dir}")
         return
-    from cosyvoice.tokenizer.tokenizer import CosyVoice3Tokenizer
+    try:
+        from cosyvoice.tokenizer.tokenizer import CosyVoice3Tokenizer
+    except ImportError:
+        # The common path: converting under a plain torch with no upstream repo. The
+        # tokenizer is fetched prebuilt by scripts/fetch-assets.sh, so this is not fatal —
+        # but say which file is expected, because a missing one fails much later as
+        # `<|endofprompt|>` tokenizing to nine pieces and an assertion inside the LLM.
+        print(
+            f"[skip] tokenizer: the `cosyvoice` package is not importable, so "
+            f"{out_dir/'tokenizer.json'} was not rebuilt.\n"
+            f"       That file is fetched prebuilt by scripts/fetch-assets.sh; this is only a\n"
+            f"       problem if it is absent. To build it here instead, run this script from\n"
+            f"       the upstream CosyVoice repo with PYTHONPATH=.:third_party/Matcha-TTS."
+        )
+        return
 
     wrapper = CosyVoice3Tokenizer(str(tok_dir))
     hf = wrapper.tokenizer

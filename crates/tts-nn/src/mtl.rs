@@ -1,6 +1,6 @@
 //! The custom Metal kernels this crate ships, and the pipeline cache behind them.
 //!
-//! Everything here exists because of two measurements in `docs/performance/candle-on-metal.md`:
+//! Everything here exists because of two measurements in `docs/reference.md#performance`:
 //!
 //! - **Finding 2**: candle performs no fusion whatsoever. `snake` as five composed ops
 //!   costs 11.5 ms at `[1, 96, 131072]`, and the five ops measured individually sum to

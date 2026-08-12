@@ -204,7 +204,7 @@ impl Llm {
         if !text.contains(&k::ENDOFPROMPT) {
             bail!(
                 "the prompt text has no <|endofprompt|> (id {}) — the voice asset's \
-                 `prompt_text` must carry it; see trap 2 in docs/porting/cosyvoice.md",
+                 `prompt_text` must carry it; see trap 2 in docs/reference.md#porting-traps",
                 k::ENDOFPROMPT
             );
         }

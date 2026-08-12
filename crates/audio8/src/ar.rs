@@ -4,7 +4,7 @@
 //! layers then emits the 9 residual codebooks for that frame, one position at a time.
 //! Note the arithmetic that surprised this project: the fast AR runs 4 layers x 10
 //! positions = **40 layer-passes per frame against the slow AR's 24**, so it is the
-//! larger half of the cost. See `docs/performance/ar-loop.md`.
+//! larger half of the cost. See `docs/reference.md#performance`.
 //!
 //! The three measured levers are structural here, not options:
 //!
@@ -20,7 +20,7 @@
 //!   in full precision while everything else is quantized.
 //!
 //! Weights: the 28 layers' projections are q8_0 (3.35x, measured to cost nothing
-//! audible — see `docs/performance/quantization-quality.md`); embeddings, heads and norms stay f32.
+//! audible — see `docs/reference.md#memory-and-quantization-quality`); embeddings, heads and norms stay f32.
 
 use crate::cfg;
 use crate::nn::{rms_norm, rope_table, Proj, Weights};
@@ -1028,7 +1028,7 @@ impl Model {
 /// Note also what the same measurement says about the *ceiling*: per-sequence gain saturates
 /// near **2x**, not the 11.95x the layer benchmark projected, because the sampler runs on the
 /// host once per sequence per codebook and does not amortise at all. See
-/// `docs/performance/ar-loop.md`.
+/// `docs/reference.md#performance`.
 ///
 /// Returns index groups into the original slice; the caller reassembles in order.
 pub fn plan_batches(n: usize, max_batch: usize) -> Vec<Vec<usize>> {

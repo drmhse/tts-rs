@@ -19,7 +19,7 @@ const FRAMES: usize = 64;
 const ITERS: usize = 3;
 
 /// Depthwise conv as shifted broadcast-muls: 19x faster than candle's grouped
-/// conv on Metal (37.78 ms -> 1.96 ms). See docs/rejected/coreml-and-op-coverage.md.
+/// conv on Metal (37.78 ms -> 1.96 ms). See docs/reference.md#what-did-not-work.
 fn depthwise_k7(x: &Tensor, taps: &[Tensor]) -> candle_core::Result<Tensor> {
     let len = x.dim(2)?;
     let padded = x.pad_with_zeros(2, 6, 0)?;

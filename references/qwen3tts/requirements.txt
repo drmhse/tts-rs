@@ -1,8 +1,9 @@
 # Reference side only — fixtures and voice assets, never runtime.
 #
-# Upstream is pip-installable, so no PYTHONPATH dance. Pin the revision: fixtures are ground
-# truth from one revision of the reference.
-qwen-tts @ git+https://github.com/QwenLM/Qwen3-TTS.git@main
+# Upstream is pip-installable, so no PYTHONPATH dance. Pinned to a commit, not to `main`:
+# fixtures are ground truth from one revision of the reference, and tracking a moving branch
+# means a gate can start failing because upstream moved rather than because the port broke.
+qwen-tts @ git+https://github.com/QwenLM/Qwen3-TTS.git@022e286b98fbec7e1e916cb940cdf532cd9f488e
 
 # Fixtures are fp32 CPU, so CPU torch is enough.
 torch>=2.4

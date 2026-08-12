@@ -66,7 +66,7 @@ esac
 # reads, and only a dense GEMM shares one read across a batch of segments: f16 batches 7.4x per
 # lane where q8_0 batches 1.1x. A chapter is hundreds of segments, so it always batches — RTF
 # 0.31 against 0.66. The trade is single-sentence latency, which a book does not have.
-# docs/performance/qwen3tts-batching.md has the numbers.
+# docs/reference.md#performance has the numbers.
 command -v ffmpeg >/dev/null || die "ffmpeg not found (needed for Opus encoding)"
 mkdir -p "$OUT"
 

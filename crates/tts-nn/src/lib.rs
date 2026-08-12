@@ -2,7 +2,7 @@
 //! tables, weight loading, and the quantized projection wrapper.
 //!
 //! This crate exists so `cosyvoice` can reuse what the Audio8 port established without
-//! depending on `audio8` (see `docs/architecture.md`: engines do not know about each other).
+//! depending on `audio8` (see `docs/reference.md#architecture`: engines do not know about each other).
 //! Everything here is engine-agnostic; anything that needs a model's geometry belongs
 //! in that model's crate.
 //!
@@ -155,7 +155,7 @@ pub enum Proj {
     ///
     /// Half the bytes of `Dense` and, unlike `Quant`, a *real* GEMM — so its weight read
     /// amortises across a batch. That combination is the only one that makes batched decode
-    /// pay on this backend: see `docs/performance/qwen3tts-batching.md`. The cast of `x` is
+    /// pay on this backend: see `docs/reference.md#performance`. The cast of `x` is
     /// free by comparison, being one row per lane against a whole weight matrix.
     Half(Tensor),
     Quant(QMatMul),
@@ -345,7 +345,7 @@ impl Linear {
 /// stride 1 is provably zero — and every causal conv on the *decode* path has stride 1
 /// (the strided k2/s2 convs are all encoder-side). This is also the trap that silently
 /// length-locked the ONNX export: under tracing `math.ceil` on a shape collapses to a
-/// constant. See `docs/rejected/onnx.md`.
+/// constant. See `docs/reference.md#what-did-not-work`.
 pub fn causal_conv1d(
     x: &Tensor,
     w: &Tensor,
@@ -380,7 +380,7 @@ pub fn tap_major_weight(w: &Tensor) -> Result<Tensor> {
 ///
 /// # How this differs from the conv-as-GEMM that was refuted
 ///
-/// `docs/performance/candle-on-metal.md` Finding 1 refuted im2col and attributed the loss to
+/// `docs/reference.md#performance` Finding 1 refuted im2col and attributed the loss to
 /// materialisation traffic. Splitting the route in two showed that was the wrong
 /// attribution: at `96ch @ 131072` the **GEMM takes 7.1 ms** — 2.4 TFLOP/s, already 8.4x
 /// faster than the 59.7 ms direct conv — and **the gather took 82.5 ms**, about 4.9 GB/s on a

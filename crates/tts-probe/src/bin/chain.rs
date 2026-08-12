@@ -1,6 +1,6 @@
 //! Serial dependency, not bandwidth.
 //!
-//! `matvec` refuted the conclusion in the first draft of `docs/performance/ar-loop.md`.
+//! `matvec` refuted the conclusion in the first draft of `docs/reference.md#performance`.
 //! Individual q8_0 matvecs hit **99–139 GB/s** against a ~120 GB/s bus — candle's
 //! quantized matvec kernel is already saturating memory, and there is no 3.5x
 //! sitting in a better kernel.

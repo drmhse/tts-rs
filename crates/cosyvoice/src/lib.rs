@@ -74,7 +74,7 @@
 //!
 //! Streaming, and the reference's text normalisation (an FST-based normaliser plus number
 //! spell-out). Both are stated in [`engine::capabilities`]'s documentation rather than
-//! left to be discovered. See `docs/porting/cosyvoice.md`.
+//! left to be discovered. See `docs/reference.md#porting-traps`.
 
 pub mod cfg;
 pub mod engine;

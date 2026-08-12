@@ -291,7 +291,7 @@ impl Predictor {
 
         // Sampled on the host. Doing it on device to avoid fifteen round trips per frame was
         // tried and reverted — candle 0.10.2's Metal `sort_last_dim` silently returns zeros
-        // above n=1024 and the vocabulary here is 2048. See `docs/rejected/device-sampling.md`.
+        // above n=1024 and the vocabulary here is 2048. See `docs/reference.md#what-did-not-work`.
         let mut codes = Vec::with_capacity(pk::HEADS_OUT);
         // Off unless `QWEN3TTS_TIMING`: the syncs it needs are themselves a cost.
         let split = timing_on();

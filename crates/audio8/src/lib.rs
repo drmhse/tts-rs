@@ -14,7 +14,7 @@
 //! What is deliberately absent: the codec *encoder*. Cloning needs a reference clip
 //! turned into codes, but that is a one-off offline step, so the codes ship as an
 //! asset (`fixtures/audio8/default_voice_codes.safetensors`) and 126 encoder tensors stay
-//! out of the binary. See `docs/status.md`.
+//! out of the binary. See `docs/reference.md`.
 //!
 //! Segments decode in batches ([`ar::Model::generate_batch`], `--set max_batch=<n>`).
 //! Two things about that are worth knowing before touching it: prompts are
@@ -23,7 +23,7 @@
 //! `R(p)^T R(j) = R(p - j)` to about 4e-3. And the per-sequence gain is **~1.9x, not the
 //! 11.95x** a layer benchmark projected: a decode step is 64 layer-passes plus ten host
 //! synchronisations plus a sampler that runs once per sequence, and only the projections
-//! scale freely with batch. `docs/performance/ar-loop.md` has the numbers and the two measurements
+//! scale freely with batch. `docs/reference.md#performance` has the numbers and the two measurements
 //! that turned out to be measuring something else.
 
 pub mod ar;

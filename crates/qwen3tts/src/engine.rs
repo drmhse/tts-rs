@@ -55,7 +55,7 @@ const SEGMENT_MIN_VARIETY: f64 = 0.35;
 /// - **`f32`** is for fixture work. 6.3 GB of projections thrashes a 16 GB machine — measured
 ///   1994 ms/frame against q8_0's 52, memory pressure rather than arithmetic.
 ///
-/// `docs/performance/qwen3tts-batching.md` has the measurements.
+/// `docs/reference.md#performance` has the measurements.
 const QUANT: &[&str] = &["q8_0", "f16", "f32", "q5_0", "q4_1", "q4_0"];
 
 /// One segment's decoded frames, with the paragraph index and character count it came from.
@@ -146,7 +146,7 @@ impl Paths {
             missing.is_empty(),
             "engine `{ID}` is missing {} weight file(s): {}. Download \
              Qwen/Qwen3-TTS-12Hz-1.7B-Base into references/qwen3tts/weights — see \
-             docs/setup.md",
+             docs/reference.md#setup",
             missing.len(),
             missing
                 .iter()

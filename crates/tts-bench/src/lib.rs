@@ -1,6 +1,6 @@
 //! Thermally-honest benchmarking.
 //!
-//! Rules, from `docs/benchmarking.md`:
+//! Rules, from `docs/reference.md#how-to-measure-without-fooling-yourself`:
 //!
 //! 1. Interleave every variant in the same run, alternating round by round, so a
 //!    clock change hits all variants roughly equally and cancels in the ratio.

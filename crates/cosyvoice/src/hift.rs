@@ -51,7 +51,7 @@
 //! f32 and does the phase accumulation in f32 anyway — so the f64 buys precision in the
 //! convolutions only. Metal has no f64. Measured difference on this fixture: 2.8e-3 Hz
 //! on an F0 range of 0-347 Hz, and the resulting waveform difference is reported by
-//! `cosyvoice-validate` rather than assumed. See trap 8 in `docs/porting/cosyvoice.md`.
+//! `cosyvoice-validate` rather than assumed. See trap 8 in `docs/reference.md#porting-traps`.
 //!
 //! **The leaky-ReLU before `conv_post` uses slope 0.01, not 0.1.** The reference writes
 //! it as a bare `F.leaky_relu(x)`, taking torch's default, while every other one in the

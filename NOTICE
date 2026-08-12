@@ -1,0 +1,59 @@
+tts-rs
+Copyright 2026 the tts-rs authors
+
+This product includes software developed under the Apache License, Version 2.0.
+
+--------------------------------------------------------------------------------
+Derivative works of third-party models
+--------------------------------------------------------------------------------
+
+This repository contains no model weights. It does contain, and distributes through
+the companion dataset https://huggingface.co/datasets/drmhse/tts-rs-assets, artifacts
+derived from three third-party models. Each is licensed Apache-2.0 by its authors, and
+that licence reaches the derived artifacts.
+
+1. Audio8-TTS-Preview-0.6b
+   https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
+   Licence: Apache-2.0
+   Revision recorded: f9612f13a0ab40facf3d050fc908b9e6db05c2be
+
+   Derived here:
+     fixtures/audio8/oracle.safetensors              per-stage fp32 activations
+     fixtures/audio8/default_voice_codes.safetensors reference speech codes
+     voices/cosy-default/                            voice asset from reference audio
+
+2. Fun-CosyVoice3-0.5B
+   https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B
+   Upstream code: https://github.com/FunAudioLLM/CosyVoice
+   Licence: Apache-2.0
+   Revision recorded: 29e01c4e8d000f4bcd70751be16fa94bf3d85a18
+
+   Derived here:
+     fixtures/cosyvoice/oracle.safetensors           per-stage fp32 activations
+     references/cosyvoice/weights/rand_noise.safetensors
+                                                     tensor drawn by the model's
+                                                     constructor under seed 0
+     references/cosyvoice/weights/tokenizer.json     tokenizer serialised by upstream
+                                                     CosyVoice3Tokenizer code
+     voices/cosy-default-cosyvoice/                  voice asset from reference audio
+
+3. Qwen3-TTS-12Hz-1.7B-Base
+   https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base
+   Licence: Apache-2.0
+   Revision recorded: fd4b254389122332181a7c3db7f27e918eec64e3
+
+   Derived here:
+     fixtures/qwen3tts/oracle.safetensors            per-stage fp32 activations
+     voices/cosy-default-qwen3tts/                   voice asset from reference audio
+
+The revisions above are each repository's HEAD as read on 2026-08-12 and are recorded so
+that later drift is diagnosable. The artifacts themselves were produced in late July and
+early August 2026; where an upstream repository moved in between, the revision named here
+is the later one.
+
+Statement of changes, per Apache-2.0 section 4(b): none of the above are the upstream
+models. They are activations computed by them, tensors drawn by their constructors,
+tokenizers serialised by their code, or speaker assets encoded from reference audio they
+ship. The Rust reimplementations in crates/ were written against these models' published
+architectures and deliberately differ from them in the ways documented in
+docs/porting/ and docs/status.md.

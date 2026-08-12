@@ -15,7 +15,7 @@
 //! sweep like that produced RTF 0.946 for a configuration that is genuinely faster, with the
 //! *codec* — untouched by the change — appearing 29% slower in the same run. The canary read
 //! 204 ms against 60 ms cool. Interleaving the variants inside one process is the only way to
-//! get a trustworthy ratio; see `docs/benchmarking.md`.
+//! get a trustworthy ratio; see `docs/reference.md#how-to-measure-without-fooling-yourself`.
 //!
 //! Run: `cargo run -p tts-probe --release --bin arschedule`
 

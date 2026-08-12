@@ -103,7 +103,7 @@ for row in "${ROWS[@]}"; do
 done
 
 # 141 wpm and RTF 0.32 are measured for qwen3tts at f16 on this machine
-# (docs/performance/qwen3tts-batching.md). Other engines are slower; the per-chapter ETA that
+# (docs/reference.md#performance). Other engines are slower; the per-chapter ETA that
 # narrate-book.sh prints is measured live and supersedes this one.
 read -r est_audio est_wall <<EOF
 $(python3 -c "

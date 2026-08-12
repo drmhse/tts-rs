@@ -1,6 +1,6 @@
 //! Fused elementwise activations.
 //!
-//! `docs/performance/candle-on-metal.md` Finding 2 measured snake at 11.5 ms for `[1, 96, 131072]` and
+//! `docs/reference.md#performance` Finding 2 measured snake at 11.5 ms for `[1, 96, 131072]` and
 //! showed its five constituent ops sum to 13.7 ms — they match, which is the proof that
 //! candle fuses nothing. A single pass costs what `affine` costs, 1.33 ms.
 //!

@@ -3,10 +3,10 @@
 # Regenerate the audio in examples/.
 #
 # The renders are not tracked — they are 34 MB and they change whenever the sampler,
-# the seed, or the engine does. examples/README.md describes what each one is *for*;
+# the seed, or the engine does. docs/reference.md describes what each one is *for*;
 # this produces them.
 #
-# Needs both engines set up (docs/setup.md) and the PyTorch references for the
+# Needs both engines set up (docs/reference.md#setup) and the PyTorch references for the
 # `*_torch` / `senior.wav` comparisons, which this script does not attempt.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -31,5 +31,5 @@ cat <<'MSG'
 
 Done. The PyTorch reference renders (senior.wav, senior_batch8.wav,
 senior_cosyvoice.wav, cosy_senior_torch.wav) come from references/audio8/synthesize.py and
-references/cosyvoice/reference_render.py — see examples/README.md.
+references/cosyvoice/reference_render.py — see docs/reference.md.
 MSG

@@ -190,7 +190,10 @@ mod tests {
             change scope, support and field engineers who see failure first, respected \
             practitioners from outside, and where the change touches data retention, \
             contracts or compliance, security, legal and operations.";
-        assert!(long.len() > 220, "fixture must exceed the budget to be meaningful");
+        assert!(
+            long.len() > 220,
+            "fixture must exceed the budget to be meaningful"
+        );
         for para in segment(long, 220) {
             for seg in para {
                 assert!(seg.len() <= 220, "segment of {} bytes: {seg}", seg.len());
@@ -202,16 +205,27 @@ mod tests {
     fn long_sentence_prefers_clause_boundaries() {
         // Two clauses of ~30 bytes each with a 40-byte budget: the split must land on the
         // comma rather than mid-clause.
-        let pieces = split_long("alpha beta gamma delta epsilon, zeta eta theta iota kappa", 40);
+        let pieces = split_long(
+            "alpha beta gamma delta epsilon, zeta eta theta iota kappa",
+            40,
+        );
         assert!(pieces.len() >= 2);
-        assert!(pieces[0].ends_with(','), "expected a clause break, got {:?}", pieces[0]);
+        assert!(
+            pieces[0].ends_with(','),
+            "expected a clause break, got {:?}",
+            pieces[0]
+        );
     }
 
     #[test]
     fn unpunctuated_run_still_bounded() {
         let words = "alpha ".repeat(200);
         for piece in split_long(words.trim(), 60) {
-            assert!(piece.len() <= 60, "unbounded piece of {} bytes", piece.len());
+            assert!(
+                piece.len() <= 60,
+                "unbounded piece of {} bytes",
+                piece.len()
+            );
         }
     }
 

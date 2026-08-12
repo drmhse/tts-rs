@@ -68,7 +68,7 @@ pub fn capabilities() -> Capabilities {
         cloning: Cloning::PrecomputedAsset,
         // The reference streams; this port does not yet. The vocoder's chunk cache and
         // the flow's chunked attention masks are both unimplemented on purpose — see
-        // docs/porting/cosyvoice.md.
+        // docs/reference.md#porting-traps.
         streaming: false,
         quantization: QUANT,
         available: true,
@@ -391,11 +391,9 @@ impl Engine for CosyVoiceEngine {
             );
             for &i in &short {
                 let one = std::slice::from_ref(&prompts[i]);
-                let redone = self.llm.generate_batch_with(
-                    one,
-                    &mut rng,
-                    request.sampling.greedy,
-                )?;
+                let redone =
+                    self.llm
+                        .generate_batch_with(one, &mut rng, request.sampling.greedy)?;
                 if let Some(speech) = redone.into_iter().next() {
                     if speech.len() > generated[i].len() {
                         generated[i] = speech;
@@ -408,8 +406,7 @@ impl Engine for CosyVoiceEngine {
                 let still: Vec<String> = short
                     .iter()
                     .filter(|&&i| {
-                        (generated[i].len() as f64
-                            / seg_text[i].chars().count().max(1) as f64)
+                        (generated[i].len() as f64 / seg_text[i].chars().count().max(1) as f64)
                             < median * TRUNCATION_RATIO_FLOOR
                     })
                     .map(|&i| {

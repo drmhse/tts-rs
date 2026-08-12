@@ -39,7 +39,7 @@ fn by_codebook(frames: &[Vec<u32>]) -> Result<Vec<Vec<u32>>> {
 /// upsampling stack. Storage rounding that would random-walk to ~5e-3 gets multiplied instead.
 ///
 /// Left as a constant because that is the whole switch, and because the plumbing costs nothing:
-/// see `docs/rejected/f16-codec-decoder.md`.
+/// see `docs/reference.md#what-did-not-work`.
 const WAV_DTYPE: DType = DType::F32;
 
 /// Residual units use dilations 1, 3, 9 — hardcoded in the reference's `DecoderBlock`, not
@@ -331,7 +331,9 @@ impl Codec {
         let blocks = k::UPSAMPLE_RATES
             .iter()
             .enumerate()
-            .map(|(i, &r)| DecoderBlock::load(&w, &format!("decoder.decoder.{}", i + 1), r, WAV_DTYPE))
+            .map(|(i, &r)| {
+                DecoderBlock::load(&w, &format!("decoder.decoder.{}", i + 1), r, WAV_DTYPE)
+            })
             .collect::<Result<Vec<_>>>()?;
         let last = k::UPSAMPLE_RATES.len() + 1;
 

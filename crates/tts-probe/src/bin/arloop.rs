@@ -4,7 +4,7 @@
 //! of the RTF and had exactly one data point (a 6.72 ms logit projection). This
 //! builds the whole thing with random weights at the real geometry — shapes
 //! determine cost, so correctness is irrelevant here — and A/B tests the three
-//! levers identified in docs/porting/audio8.md / docs/rejected/coreml-and-op-coverage.md:
+//! levers identified in docs/reference.md#porting-traps / docs/reference.md#what-did-not-work:
 //!
 //!   1. **Logit slice.** The slow AR projects 896 -> 155776 every token, then
 //!      `ArkttsSemanticLogitsProcessor` sets all but ids 151678..155773 + eos to

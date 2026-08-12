@@ -4,7 +4,7 @@
 #
 # Three tiers, cheapest first:
 #   unit tests    — no model weights needed
-#   fixture gates — need converted weights and dumped fixtures (docs/setup.md)
+#   fixture gates — need converted weights and dumped fixtures (docs/reference.md#setup)
 #   renders       — need a voice asset; produce audio for the quality scripts
 #
 # A tier whose inputs are missing is *skipped and reported*, never silently passed.
@@ -110,7 +110,7 @@ else
 fi
 
 say "Summary"
-[ "$SKIPPED" -gt 0 ] && echo "$SKIPPED tier(s) skipped for missing inputs — see docs/setup.md"
+[ "$SKIPPED" -gt 0 ] && echo "$SKIPPED tier(s) skipped for missing inputs — see docs/reference.md#setup"
 if [ "$fail" -eq 0 ]; then
   echo "everything that ran passed"
 else

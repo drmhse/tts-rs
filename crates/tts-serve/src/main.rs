@@ -211,7 +211,7 @@ fn validate(app: &App, req: &TtsRequest) -> Result<(), ApiError> {
                 StatusCode::NOT_IMPLEMENTED,
                 format!(
                     "mode='{m}' is not implemented in the Rust port — only 'zero_shot'. \
-                     The port has no instruction-prompt path; see docs/porting/cosyvoice.md."
+                     The port has no instruction-prompt path; see docs/reference.md#porting-traps."
                 ),
             ))
         }

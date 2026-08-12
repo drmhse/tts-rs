@@ -14,7 +14,7 @@
 //!    `dtype=probabilities.dtype`, so under the checkpoint's native bfloat16 both the
 //!    probabilities and the noise carry an 8-bit mantissa and the ratio ordering
 //!    collapses — measured: unintelligible output that never reaches EOS. See
-//!    `docs/status.md`. Doing this in f32 is a deliberate divergence from
+//!    `docs/reference.md`. Doing this in f32 is a deliberate divergence from
 //!    the reference's behaviour under bf16, and it matches its behaviour under f32.
 
 /// Re-exported from `tts-core`: the PRNG is engine-neutral and both engines draw from

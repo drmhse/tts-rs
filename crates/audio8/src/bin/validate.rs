@@ -141,7 +141,7 @@ fn main() -> Result<()> {
 
     // Dense f32 weights here, not q8_0: this compares against an fp32 reference, so
     // quantization error would be indistinguishable from a wiring bug. The quantized
-    // path is validated on audio instead (docs/performance/quantization-quality.md).
+    // path is validated on audio instead (docs/reference.md#memory-and-quantization-quality).
     let model = Model::load("references/audio8/weights/model.safetensors", &device, None)?;
     println!("loaded AR model (dense f32)");
     let (logits, normed) = model.debug_prefill(&prompt)?;
@@ -372,7 +372,7 @@ fn main() -> Result<()> {
         // rounding commute with a position shift, which it does not.
         //
         // What makes shipping this defensible is not this row but the audio: see
-        // docs/performance/ar-loop.md for WER and voice metrics on a batched long-form render.
+        // docs/reference.md#performance for WER and voice metrics on a batched long-form render.
         let mut agree = 0usize;
         for i in 0..prompts.len() {
             let (a, b) = (&solo[i], &batched[i]);
