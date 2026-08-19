@@ -40,20 +40,50 @@ use anyhow::{Context, Result};
 /// every kernel test was failing there while passing on real hardware. So the tests probe
 /// with one real dispatch and skip the Metal arm when the GPU cannot execute at all.
 ///
+/// The probe has to survive a panic, not just an error. A runner with no Metal device at all
+/// does not return `Err`: candle builds the device with `metal::Device::all().swap_remove(0)`,
+/// that list is empty, and the constructor panics inside `Vec`. Both kernel tests died there
+/// with "swap_remove index (is 0) should be < len (is 0)" while the ten tests that never
+/// reach a GPU passed beside them.
+///
 /// This does **not** weaken the tests. A device that runs the probe and then returns wrong
 /// numbers still fails, because the comparison against the CPU implementation is unchanged.
 /// The only thing skipped is a machine with no working GPU.
 #[cfg(all(test, feature = "metal"))]
 pub(crate) fn usable_metal() -> Option<Device> {
-    let d = Device::new_metal(0).ok()?;
-    let x = Tensor::zeros((1, 4, 8), DType::F32, &d).ok()?;
-    let a = Tensor::ones(4, DType::F32, &d).ok()?;
-    // A real kernel, forced to completion — `to_vec3` synchronises.
-    crate::fused::snake_beta(&x, &a, &a)
-        .ok()?
-        .to_vec3::<f32>()
-        .ok()?;
-    Some(d)
+    use std::sync::OnceLock;
+    static PROBE: OnceLock<Option<Device>> = OnceLock::new();
+
+    PROBE
+        .get_or_init(|| {
+            // The hook is silenced for the probe alone, so a machine without a GPU reports a
+            // skip rather than a backtrace that reads like a failure. `get_or_init` runs once,
+            // which keeps that window as short as the parallel test runner allows.
+            let hook = std::panic::take_hook();
+            std::panic::set_hook(Box::new(|_| {}));
+            let probed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let d = Device::new_metal(0).ok()?;
+                let x = Tensor::zeros((1, 4, 8), DType::F32, &d).ok()?;
+                let a = Tensor::ones(4, DType::F32, &d).ok()?;
+                // A real kernel, forced to completion. `to_vec3` synchronises.
+                crate::fused::snake_beta(&x, &a, &a)
+                    .ok()?
+                    .to_vec3::<f32>()
+                    .ok()?;
+                Some(d)
+            }));
+            std::panic::set_hook(hook);
+            match probed {
+                Ok(device) => device,
+                Err(_) => {
+                    eprintln!(
+                        "note: no usable Metal device; the Metal arm of these tests is skipped"
+                    );
+                    None
+                }
+            }
+        })
+        .clone()
 }
 
 use candle_core::quantized::{GgmlDType, QMatMul, QTensor};
