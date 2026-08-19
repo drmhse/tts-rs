@@ -190,7 +190,10 @@ fn closer_end(chars: &[char], i: usize) -> Option<usize> {
         return None;
     }
     let mut j = i;
-    while matches!(chars.get(j), Some('"' | '\'' | ')' | ']' | '\u{201d}' | '\u{2019}')) {
+    while matches!(
+        chars.get(j),
+        Some('"' | '\'' | ')' | ']' | '\u{201d}' | '\u{2019}')
+    ) {
         j += 1;
     }
     match chars.get(j) {
