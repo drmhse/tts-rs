@@ -1,13 +1,9 @@
 # tts-rs
 
-Local text-to-speech in Rust. Text in, speech out, one process, no Python at runtime. Three
-voice-cloning models ported from PyTorch, each validated stage by stage against fp32
-activations dumped from its reference.
+Narrate anything in a cloned voice, on your own Mac, offline. A 1612-word chapter becomes
+11 minutes of speech in 2m 40s. One binary, no service, no API key.
 
 ### ▶ [Hear it first: one chapter, three engines, two cloned voices](https://drmhse.github.io/tts-rs/)
-
-Same text, same laptop, one Rust process. The fastest engine turns a 1612-word chapter into
-11 minutes of speech in 2m 40s.
 
 **Requirements: macOS on Apple silicon.** The custom kernels are Metal. Every number here was
 measured on an M4 with 16 GB. It builds and runs elsewhere with `--no-default-features`, on
@@ -42,18 +38,26 @@ one is ~4 GB:
 Every step is skipped if its output exists, so re-running is cheap. Details in
 **[docs/reference.md](docs/reference.md#setup)**.
 
-## What you can do with it
+## Speak in someone's voice
 
-| | |
-|---|---|
-| **Clone a voice and speak** | a 10-second reference clip becomes a tracked voice asset; no encoder at runtime |
-| **Serve an HTTP API** | `tts-serve`, one engine loaded once, 3.0 s start, per-request voice and seed, cost headers on every response |
-| **Use it as a library** | one `Engine` trait, engines chosen by string id at request time |
-| **Narrate a whole book** | markdown in, delivery audio plus word-level timings out, resumable per stage |
+A voice is a directory, and the repo ships several. Building your own takes a clip of about
+ten seconds and its exact transcript:
+
+```sh
+references/qwen3tts/.venv/bin/python references/qwen3tts/export_voice.py \
+    --model references/qwen3tts/weights --audio clip.wav \
+    --text "the exact words spoken in the clip" \
+    --name my-voice --out voices/my-voice
+```
+
+Pass it to any command as `--voice voices/my-voice`. `tts voice voices/my-voice` prints what
+an asset holds without synthesising.
+
+This export is the only step that wants Python, and it runs once per voice. Install
+`references/<engine>/requirements.txt` in a venv first. The speaker encoders stay there: the
+runtime loads the exported conditioning and never carries an encoder.
 
 ## The engines, and what they cost
-
-### ▶ [Listen to all three side by side →](https://drmhse.github.io/tts-rs/)
 
 All three narrate the same 1612-word chapter (`examples/chapter.txt`, in the repo). Each runs
 in the configuration it ships in, in two cloned voices, on one M4 with 16 GB and no Python
@@ -80,13 +84,69 @@ cargo run -p tts-cli --release -- speak --engine qwen3tts \
 ```
 
 `qwen3tts` gets there by batching across sections. That needs `--quant f16` and it needs
-length: on a 7-segment passage it is the *slowest* of the three at 0.665. It also supports ten
-languages only (en, de, es, zh, ja, fr, ko, ru, it, pt). The other two do not batch meaningfully
-and are steady at any length. `audio8` is **2.36× its PyTorch reference** like for like, with
-that reference running on MPS too.
+length: on a 7-segment passage it is the *slowest* of the three at 0.665. The other two do not
+batch meaningfully and are steady at any length. `audio8` is **2.36× its PyTorch reference**
+like for like, with that reference running on MPS too.
 
 Short-passage figures, for comparison. `examples/senior.txt`, 132 words, median of five with
 the engines interleaved: `audio8` 0.554, `cosyvoice` 0.726, `qwen3tts` 0.665.
+
+## Narrate a whole book
+
+```sh
+scripts/narrate-book.sh --book path/to/document --out narration --engine qwen3tts
+scripts/verify-narration.py narration/*.webm
+```
+
+Markdown in. Delivery audio and word-level timings out. One engine load for the whole run.
+Resumable per *stage*: a section with a WAV master is never re-synthesised. Deterministic
+under a seed. A 16-hour document costs about **4 hours** of synthesis at `qwen3tts`'s 0.260,
+against ~12 at `cosyvoice`'s 0.726. Recognition adds an hour either way.
+
+## Serve it over HTTP
+
+```sh
+TTS_API_KEY=secret cargo run -p tts-serve --release -- --port 3003
+
+curl -X POST localhost:3003/tts -H "X-API-Key: secret" \
+     -H 'content-type: application/json' \
+     -d '{"text":"Hello from Rust.","voice":"voices/cosy-default-male","seed":7}' \
+     -o out.wav -D headers.txt
+```
+
+One engine, loaded once, in 3.0 s. `voice` and `seed` are per request. The first selects a
+voice asset without a restart. The second makes a render reproducible.
+
+| route | |
+|---|---|
+| `POST /tts` | WAV body, PCM s16le mono |
+| `POST /tts/stream` | same, buffered rather than incremental |
+| `GET /v1/capabilities` | engines, sample rates, and the weight formats each supports |
+| `GET /health` | liveness |
+| `GET /` | lists the live routes **and** the unimplemented ones, which answer `501` |
+
+**Every response carries its own cost.** `x-audio-seconds`, `x-wall-seconds`, `x-rtf`, and
+`x-stages` with the per-stage split (`llm=10.296,flow=25.129,vocoder=2.898`). A client sees
+where the time went without a second request.
+
+## Use it as a library
+
+```rust
+use tts_core::{EngineConfig, SynthesisRequest, Voice};
+
+let config = EngineConfig::new(tts_engines::default_root("cosyvoice"));
+let engine = tts_engines::load("cosyvoice", &config)?;
+
+let voice = Voice::load("voices/cosy-default-cosyvoice")?;
+let request = SynthesisRequest::new("Hello from Rust.").with_voice(voice);
+engine.validate(&request)?;                 // rejects a mismatched asset up front
+
+let out = engine.synthesize(&request)?;
+tts_core::wav::write("hello.wav", &out.audio)?;
+println!("RTF {:.3}", out.stats.rtf(out.audio.seconds()));
+```
+
+One `Engine` trait. Engines are chosen by string id at request time.
 
 ## Limitations
 
@@ -103,58 +163,13 @@ One comparison is not worth making. `cosyvoice` looks 6× faster than its PyTorc
 That is only because upstream hardcodes `cuda if available else cpu` and has no MPS path.
 Against a service that does use MPS it is ahead by about 5%.
 
-## Serving it as an HTTP API
+## How it is built
 
-```sh
-TTS_API_KEY=secret cargo run -p tts-serve --release -- --port 3003
-
-curl -X POST localhost:3003/tts -H "X-API-Key: secret" \
-     -H 'content-type: application/json' \
-     -d '{"text":"Hello from Rust.","voice":"voices/cosy-default-male","seed":7}' \
-     -o out.wav -D headers.txt
-```
-
-| route | |
-|---|---|
-| `POST /tts` | WAV body, PCM s16le mono |
-| `POST /tts/stream` | same, buffered rather than incremental |
-| `GET /v1/capabilities` | engines, sample rates, and the weight formats each supports |
-| `GET /health` | liveness |
-| `GET /` | lists the live routes **and** the unimplemented ones, which answer `501` |
-
-**Every response carries its own cost.** `x-audio-seconds`, `x-wall-seconds`, `x-rtf`, and
-`x-stages` with the per-stage split (`llm=10.296,flow=25.129,vocoder=2.898`). A client sees
-where the time went without a second request. **`voice` and `seed` are per request.** The
-first selects a voice asset without a restart. The second makes a render reproducible.
-
-## Narrating long documents
-
-```sh
-scripts/narrate-book.sh --book path/to/document --out narration --engine qwen3tts
-scripts/verify-narration.py narration/*.webm
-```
-
-One engine load for the whole run. Resumable per *stage*: a section with a WAV master is never
-re-synthesised. Deterministic under a seed. A 16-hour document costs about **4 hours** of
-synthesis at `qwen3tts`'s 0.260, against ~12 at `cosyvoice`'s 0.726. Recognition adds an hour
-either way.
-
-## Using it as a library
-
-```rust
-use tts_core::{EngineConfig, SynthesisRequest, Voice};
-
-let config = EngineConfig::new(tts_engines::default_root("cosyvoice"));
-let engine = tts_engines::load("cosyvoice", &config)?;
-
-let voice = Voice::load("voices/cosy-default-cosyvoice")?;
-let request = SynthesisRequest::new("Hello from Rust.").with_voice(voice);
-engine.validate(&request)?;                 // rejects a mismatched asset up front
-
-let out = engine.synthesize(&request)?;
-tts_core::wav::write("hello.wav", &out.audio)?;
-println!("RTF {:.3}", out.stats.rtf(out.audio.seconds()));
-```
+Three PyTorch models, ported to Rust and candle, with the Metal kernels written here. Each
+stage is validated against fp32 activations dumped from its reference, so a mismatch names the
+layer that caused it. `scripts/fetch-assets.sh` pulls ~130 MB of checksummed ground truth from
+[`drmhse/tts-rs-assets`](https://huggingface.co/datasets/drmhse/tts-rs-assets), so
+`./scripts/gates.sh` runs the gates without any PyTorch installed.
 
 ## Documentation
 
@@ -191,9 +206,5 @@ scripts/                bootstrap, fetch-assets, gates, render-examples, narrati
 
 Everything shared is named `tts-*`. Everything engine-specific is named for its engine, and
 `crates/audio8`, `crates/cosyvoice` and `crates/qwen3tts` match the ids `--engine` takes.
-
 Weights and virtualenvs are not tracked; [docs/reference.md](docs/reference.md#setup) builds
-them. Fixtures are fetched rather than regenerated. `scripts/fetch-assets.sh` pulls ~130 MB of
-checksummed ground truth from
-[`drmhse/tts-rs-assets`](https://huggingface.co/datasets/drmhse/tts-rs-assets), so
-`./scripts/gates.sh` runs without any PyTorch.
+them.
