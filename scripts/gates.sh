@@ -25,6 +25,14 @@ else
   echo "tests FAILED"; fail=1
 fi
 
+say "Narration prep tests"
+if python3 scripts/test_md_to_narration.py >/dev/null 2>&1; then
+  echo "md-to-narration ok"
+else
+  python3 scripts/test_md_to_narration.py 2>&1 | tail -20
+  echo "md-to-narration FAILED"; fail=1
+fi
+
 say "Clippy and formatting (advisory)"
 if cargo fmt --check >/dev/null 2>&1; then
   echo "formatting clean"

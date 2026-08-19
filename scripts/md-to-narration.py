@@ -198,6 +198,399 @@ def speak_code(inner: str) -> str:
     return re.sub(r"\s+", " ", s).strip(" ,")
 
 
+# ------------------------------------------------------------------------ technical prose
+#
+# A research paper, a benchmark table or a costed architecture chapter carries notation prose
+# does not: maths spans, unit rates, ranges, citations, exponents. Left alone every one of
+# them is read as its characters — "3.2 GB or s", "twenty, twenty-five degrees", "one e six" —
+# and a few are worse than that, because a stray period inside a number is a sentence boundary
+# the segmenter believes (see `tts_core::text::segment`). The rules below run before the
+# general prose rules in `clean_inline`, since most of them have to see the punctuation the
+# general rules are about to remove.
+
+GREEK = {
+    "alpha": "alpha", "beta": "beta", "gamma": "gamma", "delta": "delta", "epsilon": "epsilon",
+    "zeta": "zeta", "eta": "eta", "theta": "theta", "iota": "iota", "kappa": "kappa",
+    "lambda": "lambda", "mu": "mu", "nu": "nu", "xi": "xi", "pi": "pi", "rho": "rho",
+    "sigma": "sigma", "tau": "tau", "phi": "phi", "chi": "chi", "psi": "psi", "omega": "omega",
+}
+# The letters themselves, for prose that types the glyph rather than the command. Capitals are
+# named as capitals where the case is meaningful — a paper's Δ is a change and its δ is not.
+GREEK_GLYPHS = {
+    "α": "alpha", "β": "beta", "γ": "gamma", "δ": "delta", "ε": "epsilon", "ζ": "zeta",
+    "η": "eta", "θ": "theta", "ι": "iota", "κ": "kappa", "λ": "lambda", "μ": "mu",
+    "ν": "nu", "ξ": "xi", "ρ": "rho", "σ": "sigma", "τ": "tau", "φ": "phi", "χ": "chi",
+    "ψ": "psi", "ω": "omega", "Δ": "delta", "Σ": "sigma", "Π": "product", "Ω": "omega",
+    "Φ": "phi", "Θ": "theta", "Λ": "lambda", "Γ": "gamma", "Ψ": "psi", "Ξ": "xi",
+}
+# Symbols that appear in prose rather than inside a maths span. Every one of them is silent or
+# mispronounced when passed through: `d ≈ 0.42` was read as "d 0.42", which asserts equality.
+PROSE_SYMBOLS = {
+    "±": " plus or minus ", "×": " times ", "÷": " divided by ", "≈": " about ",
+    "≃": " about ", "≅": " about ", "≤": " at most ", "≥": " at least ",
+    "≠": " not equal to ", "≡": " identical to ", "∝": " proportional to ",
+    "∞": " infinity ", "∈": " in ", "∉": " not in ", "∀": " for all ", "∃": " there exists ",
+    "∑": " the sum of ", "∏": " the product of ", "∫": " the integral of ", "√": " the square root of ",
+    "∂": " partial ", "∇": " gradient ", "⊂": " a subset of ", "∪": " union ", "∩": " intersection ",
+    "→": ", then ", "←": " from ", "↔": " and ", "⇒": ", then ", "‰": " per mille ",
+    "†": "", "‡": "", "″": " seconds ", "′": " minutes ",
+}
+
+GREEK_RE = re.compile("[" + "".join(GREEK_GLYPHS) + "]")
+
+
+def _speak_greek(m: re.Match) -> str:
+    word = GREEK_GLYPHS[m.group(0)]
+    before = m.string[m.start() - 1] if m.start() else " "
+    after = m.string[m.end()] if m.end() < len(m.string) else " "
+    return ("" if before.isspace() or not before.isalnum() else " ") + word + \
+           ("" if after.isspace() or not after.isalnum() else " ")
+
+
+MATH_SYMBOLS = {
+    "=": " equals ", "+": " plus ", "-": " minus ", "*": " times ", "/": " over ",
+    "<": " less than ", ">": " greater than ",
+}
+
+
+def speak_math(inner: str) -> str:
+    """One `$...$` span as a narrator would read it.
+
+    A paper's inline maths is a sentence constituent — "the loss is $\\mathcal{L}$" — so it can
+    no more be dropped than an inline code span can. Read literally it is worse than dropped:
+    `$\\hat{\\theta} = \\arg\\max_\\theta \\sum_i \\log p(x_i)$` reaches the voice as backslashes
+    and braces, which is both meaningless and the kind of nonsense token that sends the model
+    into a repetition loop.
+
+    Structure before symbols, and the largest structures first: a fraction has to become "over"
+    while its braces still say which operand is which, and `\\sum_{i=1}^{N}` has to be read as a
+    sum before the generic superscript rule turns its bound into "to the power N".
+    """
+    s = inner
+    # `[0, 1]` is an interval, and its comma reads as a list unless the bounds are named.
+    s = re.sub(r"\[\s*([^\[\],]+?)\s*,\s*([^\[\],]+?)\s*\]", r" the range \1 to \2 ", s)
+    for _ in range(3):  # nested fractions, innermost first
+        s = re.sub(r"\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}", r"\1 over \2", s)
+    s = re.sub(r"\\sqrt\s*\{([^{}]*)\}", r" the square root of \1 ", s)
+    s = re.sub(r"\\(?:textrm|text|mathrm|mathbf|mathbb|mathcal|boldsymbol|operatorname)\s*\{([^{}]*)\}",
+               r"\1", s)
+    # Accents are spoken after the symbol, which is how they are named aloud: "theta hat".
+    for cmd, word in (("hat", "hat"), ("bar", "bar"), ("tilde", "tilde"), ("vec", "vector")):
+        s = re.sub(r"\\" + cmd + r"\s*\{([^{}]*)\}", r"\1 " + word, s)
+        s = re.sub(r"\\" + cmd + r"\s+(\w)", r"\1 " + word, s)
+    # Big operators with bounds. `\sum_{i=1}^{N}` is "the sum from i equals 1 to N of".
+    for cmd, word in (("sum", "the sum"), ("prod", "the product"), ("int", "the integral"),
+                      ("bigcup", "the union"), ("bigcap", "the intersection")):
+        s = re.sub(r"\\" + cmd + r"_\s*\{([^{}]*)\}\s*\^\s*\{([^{}]*)\}",
+                   r" " + word + r" from \1 to \2 of ", s)
+        s = re.sub(r"\\" + cmd + r"_\s*\{([^{}]*)\}", r" " + word + r" over \1 of ", s)
+        s = re.sub(r"\\" + cmd + r"_\s*(\w+)", r" " + word + r" over \1 of ", s)
+        s = re.sub(r"\\" + cmd + r"\b", r" " + word + " of ", s)
+    # `\arg\max_\theta` — the subscript is what the maximisation ranges over.
+    s = re.sub(r"\\arg\s*\\(max|min)_\s*\{?\\?(\w+)\}?", r" arg \1 over \2 ", s)
+    s = re.sub(r"\\arg\s*\\(max|min)", r" arg \1 ", s)
+    s = re.sub(r"\^\s*\{?-\s*(\d+)\}?", r" to the minus \1 ", s)
+    s = re.sub(r"\^\s*\{?2\}?(?!\d)", " squared ", s)
+    s = re.sub(r"\^\s*\{?3\}?(?!\d)", " cubed ", s)
+    s = re.sub(r"\^\s*\{([^{}]*)\}", r" to the power \1 ", s)
+    s = re.sub(r"\^\s*([^{}\s]+)", r" to the power \1 ", s)
+    # `x_i` is a named quantity, so the subscript is spoken as its own letter rather than
+    # fused into the symbol. The command form is stripped first so `_\theta` keeps its name.
+    s = re.sub(r"_\s*\{([^{}]*)\}", r" \1", s)
+    s = re.sub(r"_\s*\\(\w+)", r" \1", s)
+    s = re.sub(r"_\s*([A-Za-z0-9])", r" \1", s)
+    for cmd, word in (
+        ("times", " times "), ("cdot", " times "), ("div", " divided by "),
+        ("leq", " at most "), ("le", " at most "), ("geq", " at least "), ("ge", " at least "),
+        ("neq", " not equal to "), ("ne", " not equal to "), ("approx", " about "),
+        ("pm", " plus or minus "), ("mid", " given "), ("in", " in "), ("notin", " not in "),
+        ("infty", " infinity "), ("to", " to "), ("rightarrow", " to "), ("propto", " proportional to "),
+        ("equiv", " identical to "), ("sim", " about "), ("ll", " much less than "),
+        ("gg", " much greater than "), ("forall", " for all "), ("exists", " there exists "),
+        ("log", " log "), ("exp", " exp "), ("ln", " natural log "), ("max", " max "),
+        ("min", " min "), ("partial", " partial "), ("nabla", " gradient "), ("%", " percent "),
+    ):
+        s = re.sub(r"\\" + cmd + r"(?![a-zA-Z])", word, s)
+    s = re.sub(r"\\(" + "|".join(GREEK) + r")(?![a-zA-Z])",
+               lambda m: " " + GREEK[m.group(1)] + " ", s)
+    s = re.sub(r"\\[a-zA-Z]+", " ", s)   # \left, \right, \quad and anything unmodelled
+    s = re.sub(r"\\.", " ", s)           # escaped punctuation
+    s = s.replace("{", " ").replace("}", " ")
+    # A hyphen between letters joins a compound name — `Volt-Amps` — and only a hyphen with a
+    # number or a space beside it is arithmetic.
+    s = re.sub(r"(?<=[A-Za-z])-(?=[A-Za-z])", " ", s)
+    for symbol, word in MATH_SYMBOLS.items():
+        s = s.replace(symbol, word)
+    s = "".join(GREEK_GLYPHS.get(ch, ch) if ch in GREEK_GLYPHS else ch for ch in s)
+    return re.sub(r"\s+", " ", s).strip(" ,")
+
+
+def drop_display_math(text: str) -> str:
+    """Remove display equations and LaTeX environments, which a listener cannot follow.
+
+    A displayed equation is a block, and this pipeline's rule for block notation is the same as
+    the site's: blocks are shown, not spoken. Verbalising one gives a minute of "the sum from i
+    equals 1 to N of y i times log y i hat" with no way to see the expression it describes, and
+    the surrounding prose almost always states the same thing in words. The inline spans, which
+    *are* sentence constituents, are kept and verbalised by `speak_math`.
+    """
+    text = re.sub(r"\\begin\{(equation|align|gather|multline|eqnarray)\*?\}.*?"
+                  r"\\end\{\1\*?\}", "", text, flags=re.S)
+    text = re.sub(r"^[ \t]*\$\$.*?\$\$[ \t]*$", "", text, flags=re.S | re.M)
+    text = re.sub(r"^[ \t]*\\\[.*?\\\][ \t]*$", "", text, flags=re.S | re.M)
+    return text
+
+
+def _speak_url(url: str) -> str:
+    """A bare link, as a narrator reads one: the site, not the address.
+
+    "https://doi.org/10.1234/abcd.5678" spoken literally is forty characters of protocol and
+    path that no listener can transcribe, and its dots are sentence boundaries besides. The
+    host carries what the sentence needs — where the thing is — and a linked phrase keeps its
+    own text, so nothing that was written as prose is lost here.
+    """
+    host = re.sub(r"^https?://(?:www\.)?", "", url).split("/")[0].rstrip(".,;:")
+    return host or ""
+
+
+# Abbreviations, expanded rather than left to the voice. Two failures, not one: the period is a
+# sentence boundary the segmenter believes, so "Fig. 2" is spoken with a full stop's fall and
+# pause in the middle of a noun phrase; and the abbreviation itself is read as letters ("cf."
+# as "see eff"). A paper fires several of these per paragraph, which is enough to make the
+# narration sound like a list rather than a sentence. Expanding fixes both at once.
+#
+# Order matters: the longest form is tried first, or `e.g.` is consumed by the `g.` half of a
+# shorter rule and `Ph.D.` by `D.`.
+ABBREVIATIONS: list[tuple[str, str]] = [
+    (r"\be\.\s*g\.(?=\s|$)", "for example"),
+    (r"\bi\.\s*e\.(?=\s|$)", "that is"),
+    (r"\ba\.\s*k\.\s*a\.(?=\s|$)", "also known as"),
+    (r"\bw\.\s*r\.\s*t\.(?=\s|$)", "with respect to"),
+    (r"\bet\s+al\.(?=[\s,;:)\]]|$)", "and colleagues"),
+    (r"\betc\.(?=[\s,;:)\]]|$)", "and so on"),
+    (r"\bcf\.(?=\s|$)", "compare"),
+    (r"\bvs\.?(?=\s|$)", "versus"),
+    (r"\bresp\.(?=\s|$)", "respectively"),
+    (r"\bapprox\.(?=\s|$)", "approximately"),
+    (r"\bca\.(?=\s+\d)", "circa"),
+    (r"\bFigs?\.(?=\s*\d)", "Figure"),
+    (r"\bEqs?\.(?=\s*\(?\d)", "Equation"),
+    (r"\bTabs?\.(?=\s*\d)", "Table"),
+    (r"\bSecs?\.(?=\s*\d)", "Section"),
+    (r"\bChs?\.(?=\s*\d)", "Chapter"),
+    (r"\bApp\.(?=\s*[A-Z\d])", "Appendix"),
+    (r"\bRefs?\.(?=\s*\[?\d)", "Reference"),
+    (r"\bAlg\.(?=\s*\d)", "Algorithm"),
+    (r"\b[Nn]os?\.(?=\s*\d)", "number"),
+    (r"\b[Vv]ol\.(?=\s*\d)", "volume"),
+    (r"\bpp\.(?=\s*\d)", "pages"),
+    (r"\bp\.(?=\s*\d)", "page"),
+    (r"\bPh\.\s*D\.", "PhD"),
+    (r"\bM\.\s*Sc\.", "MSc"),
+    (r"\bB\.\s*Sc\.", "BSc"),
+    (r"\bU\.\s*S\.\s*A?\.", "US"),
+    (r"\bDr\.(?=\s|$)", "Doctor"),
+    (r"\bProf\.(?=\s|$)", "Professor"),
+    (r"\bMr\.(?=\s|$)", "Mister"),
+    (r"\bMrs\.(?=\s|$)", "Missus"),
+    (r"\bMs\.(?=\s|$)", "Miz"),
+    (r"\bSt\.(?=\s+[A-Z])", "Saint"),
+    (r"\b(Jan|Feb|Aug|Sept?|Oct|Nov|Dec)\.(?=\s*\d)",
+     lambda m: {"Jan": "January", "Feb": "February", "Aug": "August", "Sep": "September",
+                "Sept": "September", "Oct": "October", "Nov": "November",
+                "Dec": "December"}[m.group(1)]),
+    (r"\b(Mar|Apr|Jun|Jul)\.(?=\s*\d)",
+     lambda m: {"Mar": "March", "Apr": "April", "Jun": "June", "Jul": "July"}[m.group(1)]),
+]
+
+MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August",
+          "September", "October", "November", "December"]
+
+# Unit denominators, so a rate is spoken as a rate. `3.2 GB/s` fell through to the prose slash
+# rule and became "3.2 GB or s" — an alternation between a quantity and a letter.
+RATE_UNITS = {
+    "s": "second", "sec": "second", "min": "minute", "h": "hour", "hr": "hour",
+    "day": "day", "wk": "week", "mo": "month", "yr": "year", "year": "year",
+    "kg": "kilogram", "km": "kilometre", "m": "metre", "L": "litre", "W": "watt",
+    "core": "core", "node": "node", "user": "user", "seat": "seat", "request": "request",
+    "req": "request", "query": "query", "op": "operation", "token": "token", "call": "call",
+    "capita": "head", "GB": "gigabyte", "MB": "megabyte", "TB": "terabyte",
+}
+
+# Units, expanded because the voice spells an unknown short token letter by letter: "16 GB"
+# reads as "one six gee bee" and "3 L" as "three ell". Only the units a technical corpus
+# actually writes; an unlisted one is left alone rather than guessed at.
+# The singular is carried because a unit follows its quantity's number — "1 MW" is one
+# megawatt — and because "per" takes the singular whatever the quantity was.
+UNITS = {
+    "GB": "gigabyte", "MB": "megabyte", "KB": "kilobyte", "kB": "kilobyte",
+    "TB": "terabyte", "PB": "petabyte", "Gbps": "gigabit per second",
+    "Mbps": "megabit per second", "kbps": "kilobit per second",
+    "GHz": "gigahertz", "MHz": "megahertz", "kHz": "kilohertz", "Hz": "hertz",
+    "ms": "millisecond", "\u00b5s": "microsecond", "ns": "nanosecond",
+    "GW": "gigawatt", "MW": "megawatt", "kW": "kilowatt", "W": "watt",
+    "TWh": "terawatt hour", "GWh": "gigawatt hour", "MWh": "megawatt hour",
+    "kWh": "kilowatt hour",
+    "km": "kilometre", "cm": "centimetre", "mm": "millimetre",
+    "kg": "kilogram", "mg": "milligram", "t": "tonne",
+    "mL": "millilitre", "L": "litre", "vCPU": "virtual CPU",
+}
+# Hertz is its own plural; everything else here takes an "s".
+INVARIANT_UNITS = {"Hz", "kHz", "MHz", "GHz"}
+# Units spoken even without a number in front of them. "50 dollars per MWh" is this book's
+# most common phrase and the voice spells it — "em double-you aitch" — but a bare "t" is as
+# likely to be a variable as a mass, so the licence is limited to the units where no such
+# collision exists.
+BARE_UNITS = {"GW", "MW", "kW", "TWh", "GWh", "MWh", "kWh", "GB", "TB", "PB"}
+
+
+def _unit_word(token: str, singular: bool = False) -> str:
+    word = UNITS[token]
+    if singular or token in INVARIANT_UNITS:
+        return word
+    return word + "s"
+
+
+def _speak_unit(m: re.Match) -> str:
+    """A quantity and its unit, with the number agreement a reader supplies.
+
+    Two cases take the singular. One is a quantity of exactly one — "1 MW" is one megawatt.
+    The other is attributive use: "a 4.4 GW plant" is a four-point-four gigawatt plant, the
+    same construction as "a $12 platform fee" a few rules below, and it is recognised the
+    same way — an article in front and a noun behind.
+    """
+    count, token = m.group(1), m.group(2)
+    singular = count == "1"
+    before = m.string[: m.start()]
+    after = m.string[m.end():]
+    if re.search(r"\b(?:a|an|the|[A-Za-z]+'s)\s+(?:[a-z]+\s+){0,2}\(?$", before, re.I):
+        # The noun may be capitalised — "a 16 GB M4", "a 300 MW Plant" — so the test is on
+        # the word's lower-case form rather than on its case.
+        following = re.match(r"\s+([A-Za-z]+)", after)
+        if following and following.group(1).lower() not in NOT_A_NOUN:
+            singular = True
+    return f"{count} {_unit_word(token, singular=singular)}"
+
+# Numerals a paper writes as a suffix. `7B parameters` is seven billion of them, and the voice
+# otherwise spells the letter: "seven bee".
+MAGNITUDES = {"K": "thousand", "M": "million", "B": "billion", "T": "trillion"}
+
+
+# A bracketed pair of numbers is a range, not a list. It has to be read before the bracket
+# rules in `clean_inline`, which strip the brackets and leave "95 percent CI 1.2, 3.4" —
+# two unrelated figures where the source stated an interval.
+NUMERIC_INTERVAL = re.compile(r"[\[(]\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*[\])]")
+
+
+def speak_numbers(line: str) -> str:
+    """Numeric notation: dates, ranges, exponents, rates, magnitudes, comparisons.
+
+    Every rule here has to run before the general prose rules, because each one depends on
+    punctuation those rules remove: the range rule needs the en dash the em-dash rule is about
+    to turn into a comma, the rate rule needs the slash the alternation rule is about to turn
+    into "or", and the interval rule needs the brackets the template-bracket rule strips.
+    """
+    # ISO dates, before any rule that reads a hyphen as a range or a minus.
+    def _date(m: re.Match) -> str:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if not (1 <= mo <= 12 and 1 <= d <= 31):
+            return m.group(0)
+        return f"{MONTHS[mo - 1]} {d}, {y}"
+    line = re.sub(r"\b(\d{4})-(\d{2})-(\d{2})\b", _date, line)
+
+    # Scientific notation and exponents. `1.5e-3` and `10^-3` are the same quantity written two
+    # ways, and both were read as their characters.
+    line = re.sub(r"\b(\d+(?:\.\d+)?)[eE]-(\d+)\b", r"\1 times ten to the minus \2", line)
+    line = re.sub(r"\b(\d+(?:\.\d+)?)[eE]\+?(\d+)\b", r"\1 times ten to the \2", line)
+    line = re.sub(r"\b10\^\{?-\s*(\d+)\}?", r"ten to the minus \1", line)
+    line = re.sub(r"\b10\^\{?(\d+)\}?", r"ten to the \1", line)
+    line = re.sub(r"(?<=[A-Za-z0-9])\^\{?-\s*(\d+)\}?", r" to the minus \1", line)
+    line = re.sub(r"(?<=[A-Za-z0-9])\^\{?(\w+)\}?", r" to the power \1", line)
+
+    # Ranges. An en dash between numbers is "to" — as a comma it becomes a list, and "20, 25
+    # degrees" is a different claim than "20 to 25 degrees". A percentage range states its
+    # unit once: "65% - 75% quality" is 65 to 75 percent, and since the `%` is already a word
+    # by the time this runs, both spellings are matched.
+    line = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:%|percent)\s*[-–—]\s*(\d+(?:\.\d+)?)\s*(?:%|percent)",
+                  r"\1 to \2 percent", line)
+    line = re.sub(r"(\d)\s*[–—]\s*(?=\d)", r"\1 to ", line)
+    # Both sides have to be bare numbers. Without that, the rule reads the hyphen inside an
+    # identifier as a range: `x86-64` became "x86 to 64" and `CosyVoice3-0.5B` became
+    # "CosyVoice3 to 0.5 billion".
+    line = re.sub(r"(?<![\w.])(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)(?![\w.])", r"\1 to \2", line)
+
+    # Rates. The denominator is expanded because a bare letter is spelled, not read. A
+    # quantity or a unit has to sit on the left of the slash, or the rule reads an ordinary
+    # alternation as a rate: "every bus/node on the grid" became "every bus per node".
+    def _rate(m: re.Match) -> str:
+        count, numerator, denominator = m.group(1), m.group(2), m.group(3)
+        if not count and numerator not in UNITS and numerator not in ("percent", "dollars"):
+            return m.group(0)
+        return f"{count or ''}{numerator} per {RATE_UNITS[denominator]}"
+    line = re.sub(r"\b(\d+(?:\.\d+)?\s*)?([A-Za-z%]+)\s*/\s*("
+                  + "|".join(sorted(RATE_UNITS, key=len, reverse=True)) + r")\b", _rate, line)
+
+    # A magnitude suffix, but only where it is a quantity of something. `v2.0.1`, `p99` and
+    # `T5` must survive, `CosyVoice3-0.5B` is a model name rather than half a billion of
+    # anything, and "Qwen3.8 9B on a 16 GB M4" names a model where "7B parameters" counts
+    # them — so the noun behind the suffix is what licenses the reading.
+    def _magnitude(m: re.Match) -> str:
+        following = re.match(r"\s+([a-z]+)", m.string[m.end():])
+        if not following or following.group(1) in NOT_A_NOUN:
+            return m.group(0)
+        return f"{m.group(1)} {MAGNITUDES[m.group(2)]}"
+    line = re.sub(r"(?<![\w.-])(\d+(?:\.\d+)?)\s?([KMBT])\b(?![\w.-])", _magnitude, line)
+
+    # Units. After the magnitude rule, so `1.5M` is a magnitude rather than a stray metre.
+    line = re.sub(r"\b(\d+(?:\.\d+)?)\s*(" + "|".join(sorted(UNITS, key=len, reverse=True))
+                  + r")\b(?![\w-]|\.\d)", _speak_unit, line)
+    # A unit with no quantity in front of it: "per MWh", "the MW figure". See BARE_UNITS.
+    line = re.sub(r"\bper\s+(" + "|".join(sorted(BARE_UNITS, key=len, reverse=True)) + r")\b",
+                  lambda m: f"per {_unit_word(m.group(1), singular=True)}", line)
+    # ...but never the gloss that introduces it. "megawatt hours (MWh)" defines the
+    # abbreviation, and expanding the parenthetical makes the sentence define a term by
+    # repeating it: "megawatt hours (megawatt hours)".
+    line = re.sub(r"(?<![\w.(])(" + "|".join(sorted(BARE_UNITS, key=len, reverse=True))
+                  + r")\b(?![\w)-])", lambda m: _unit_word(m.group(1)), line)
+
+    # A two-digit year completing a range: "FY2024 to 25" is 2024 to 2025.
+    line = re.sub(r"(?<!\d)(\d{2})(\d{2}) to (\d{2})(?!\d)",
+                  lambda m: f"{m.group(1)}{m.group(2)} to {m.group(1)}{m.group(3)}", line)
+
+    # Percentage points, which a paper writes as `pp` after a number.
+    line = re.sub(r"(?<=\d)\s+pp\b", " percentage points", line)
+
+    # Comparisons in prose. `p < 0.05` is the whole claim of a result sentence and the voice
+    # says nothing at all for the operator.
+    line = re.sub(r"\s*<=\s*", " at most ", line)
+    line = re.sub(r"\s*>=\s*", " at least ", line)
+    line = re.sub(r"\s*!=\s*", " not equal to ", line)
+    # ...but only where a number is on one side of it. "Open Networking > Tunnels" is a
+    # breadcrumb, "a > b" in prose is rare, and reading either as a comparison is worse than
+    # leaving the character silent.
+    line = re.sub(r"(?<=[\w)])\s*<\s*(?=-?\.?\d)", " less than ", line)
+    line = re.sub(r"(?<=\d)\s*<\s*(?=[\w(])", " less than ", line)
+    line = re.sub(r"(?<=[\w)])\s*>\s*(?=-?\.?\d)", " greater than ", line)
+    line = re.sub(r"(?<=\d)\s*>\s*(?=[\w(])", " greater than ", line)
+    line = re.sub(r"(?<=[\w)])\s*=\s*(?=[\w(.-])", " equals ", line)
+
+    # A plus between terms, now that the equals sign beside it is spoken: "Supply equals
+    # Demand + Net Exports" left the addition silent, so the equation lost an operand.
+    line = re.sub(r"(?<=[\w)])\s+\+\s+(?=[\w(])", " plus ", line)
+    # An equation wrapped across two source lines carries the operator at the end of the
+    # first: "Generation = Power Consumption + ... + Change in Storage +" / "Losses".
+    line = re.sub(r"(?<=[\w)])\s+\+\s*$", " plus", line)
+
+    # Degrees. `°C` is a unit; a bare `°` is an angle.
+    line = re.sub(r"\s*°\s*C\b", " degrees Celsius", line)
+    line = re.sub(r"\s*°\s*F\b", " degrees Fahrenheit", line)
+    line = re.sub(r"\s*°", " degrees", line)
+    # A section sign is read as the word, and `§5` has no space for the voice to find.
+    line = re.sub(r"§\s*", "section ", line)
+    line = re.sub(r"¶\s*", "paragraph ", line)
+    return line
+
+
 # Compound acronyms and slash pairs that are spoken as their parts, not as "slash". Anything
 # else keeps a spoken separator, chosen below by whether the source spaced the slash.
 SLASH_PAIRS = re.compile(r"\b(I/O|pub/sub|read/write|write/read|and/or)\b", re.I)
@@ -234,10 +627,15 @@ PROSE_CAPS_AS_WORDS = {
 # A currency amount with the scale word that may follow it. Both are needed together: the
 # unit is spoken after a scale ("4.76 million dollars") but before the fraction ("4 dollars
 # 82 cents"), and no rule reading only the digits can tell those apart.
+# The scale may be a word or a suffix letter, and the suffix form is why the trailing `\b`
+# is gone: on `~$1.5M` it forced the fraction group to give up its match, the rule fired on
+# `$1` alone, and the narration read "1 dollars.5M" — a wrong figure and a sentence boundary
+# in the middle of it.
 CURRENCY = re.compile(
-    r"(\b(?:a|an|the)\s+(?:[a-z]+\s+){0,2})?"
-    r"\$(\d+(?:,\d{3})*)(?:\.(\d+))?(\s+(?:thousand|million|billion|trillion))?"
-    r"(\s+[a-z]+)?\b", re.I
+    r"(\b(?:a|an|the|[A-Za-z]+'s)\s+(?:[a-z]+\s+){0,2})?"
+    r"\$(\d+(?:,\d{3})*)(?:\.(\d+))?"
+    r"(\s*(?:thousand|million|billion|trillion)\b|[KMBT]\b)?"
+    r"(\s+[a-z]+\b)?", re.I
 )
 
 # Words that, following an amount, mean the amount is the noun rather than modifying one.
@@ -251,6 +649,8 @@ NOT_A_NOUN = {
 def _speak_currency(m: re.Match) -> str:
     det, whole, frac, scale, tail = m.groups()
     tail = tail or ""
+    scale = (scale or "").strip()
+    scale = " " + MAGNITUDES.get(scale.upper(), scale.lower()) if scale else ""
     # Attributive use: "a $12 platform fee" is spoken "a 12 dollar platform fee", singular.
     # An article ahead of the amount and a noun behind it are the two cheap signals; either
     # one alone is wrong often enough to matter, since an article can belong to an earlier
@@ -272,8 +672,31 @@ def _speak_currency(m: re.Match) -> str:
 
 def clean_inline(line: str) -> str:
     line = re.sub(r"`([^`]*)`", lambda m: speak_code(m.group(1)), line)  # inline code
+    # Currency before maths, and both before anything else: a paragraph quoting two prices
+    # looks exactly like one `$...$` span, so the prose between them would be swallowed as a
+    # formula. Inline maths is a sentence constituent and is verbalised; the display form is
+    # already gone (see `drop_display_math`).
+    # "Level 2+" and "$100M+" are the same construction — a floor, not an addition — and the
+    # plus has to be read before the currency rule consumes the number in front of it.
+    line = re.sub(r"(\d[KMBT]?)\+(?=\W|$)", r"\1 or higher", line)
+    # A range of prices carries the unit at both ends: "$10-150 per MWh" is ten to a hundred
+    # and fifty dollars, and without the second `$` the currency rule reads only the first
+    # half and leaves "10 dollars-150".
+    line = re.sub(r"\$(\d[\d,]*(?:\.\d+)?)\s*[-–—]\s*(?=\d)", r"$\1 to $", line)
+    line = CURRENCY.sub(_speak_currency, line)
+    line = re.sub(r"\$\$([^$]+)\$\$", lambda m: speak_math(m.group(1)), line)
+    line = re.sub(r"\$([^$\n]+)\$", lambda m: speak_math(m.group(1)), line)
     line = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", line)      # images
     line = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", line)  # links keep their text
+    # A footnote marker is punctuation the page shows as a superscript link. Spoken it is a
+    # caret and a digit in the middle of a clause; the note itself is narrated where it is
+    # defined (see `convert`).
+    line = re.sub(r"\[\^[^\]]+\]", "", line)
+    line = NUMERIC_INTERVAL.sub(r"\1 to \2", line)
+    # A bare URL or DOI is read character by character — "h t t p s colon slash slash" — for a
+    # string the listener cannot write down anyway. The host is the part that identifies it.
+    line = re.sub(r"<(https?://[^>]*)>", lambda m: _speak_url(m.group(1)), line)
+    line = re.sub(r"(?<![\w<])https?://\S+", lambda m: _speak_url(m.group(0)), line)
     # Markdown task-list markers. `- [ ] item` keeps its bullet stripped elsewhere, but the
     # checkbox itself stayed, so the voice read the brackets: 24 of them in one chapter, 34 in
     # another. They carry no spoken meaning.
@@ -315,8 +738,25 @@ def clean_inline(line: str) -> str:
     line = re.sub(r"\bATT&CK\b", "attack", line)
     # `AUTHZ` and `AUTHN` are jargon contractions, not initialisms; the voice made "EOTHZ" of
     # the first. Spacing the trailing letter is what a reader says: "auth Z".
+    # `Zhou & Lee` is "Zhou and Lee". The ampersand is silent otherwise, which loses the
+    # conjunction between two authors' names. ATT&CK is handled above, before this.
+    line = re.sub(r"&amp;", " and ", line)
+    line = re.sub(r"&(?:nbsp|thinsp|ensp|emsp);", " ", line)
+    line = re.sub(r"&[a-z]+;|&#\d+;", " ", line)
+    line = re.sub(r"(?<=[\w)])\s*&\s*(?=[\w(])", " and ", line)
     line = re.sub(r"\bAUTHZ\b", "auth Z", line, flags=re.I)
     line = re.sub(r"\bAUTHN\b", "auth N", line, flags=re.I)
+    # Abbreviations, before the all-caps rules: `Ph.D.` and `U.S.` are handled as units here
+    # rather than as capital runs there. See ABBREVIATIONS.
+    for pat, word in ABBREVIATIONS:
+        line = re.sub(pat, word, line)
+    # Initials. "J. R. R. Tolkien" is three sentence boundaries to the segmenter and three
+    # falling cadences to the listener; the letters alone read as a name. A *run* of them is
+    # required, because a lone capital before a full stop is far more often a label at the end
+    # of a sentence — "there is 10 MWh of demand at A. The model then..." — and stripping that
+    # period welds two sentences together.
+    line = re.sub(r"\b(?:[A-Z]\.\s*){2,}",
+                  lambda m: re.sub(r"\.\s*", " ", m.group(0)), line)
     # An all-caps word that is a word. See PROSE_CAPS_AS_WORDS.
     line = re.sub(r"\b[A-Z]{3,}\b",
                   lambda m: m.group(0).lower() if m.group(0) in PROSE_CAPS_AS_WORDS
@@ -337,8 +777,10 @@ def clean_inline(line: str) -> str:
     # depends on what follows the number, and getting that wrong is worse than dropping it:
     # a first attempt turned `$4.8 million` into "4 dollars.8 million", which is both wrong
     # and a sentence boundary the segmenter would have believed.
-    line = CURRENCY.sub(_speak_currency, line)
     line = re.sub(r"(\d)\s*%", r"\1 percent", line)
+    # Dates, ranges, exponents, rates, magnitudes and comparisons, all of which need the
+    # punctuation the rules below are about to remove. See `speak_numbers`.
+    line = speak_numbers(line)
     # An identifier of the form `I-2048` \u2014 an illustrative invoice or order number. The
     # hyphen between a letter and digits is not spoken; the space keeps the letter separate
     # so it is not swallowed into the number.
@@ -356,6 +798,16 @@ def clean_inline(line: str) -> str:
     # is spoken. Only between word characters, so a stray plus is still dropped downstream.
     line = re.sub(r"(?<=[A-Za-z0-9])\+(?=[A-Za-z0-9])", " plus ", line)
     line = line.replace("~~", "")
+    # A tilde before a quantity is "about". Left in, it is silent, so an approximation is
+    # read as an exact figure: "~$1.5M over FY2024" became "1.5 million dollars".
+    # An approximator already says it: "around ~5000 dollars" is not "around about 5000".
+    line = re.sub(r"\b(around|about|roughly|approximately)\s+~\s*(?=[\d$])", r"\1 ", line,
+                  flags=re.I)
+    line = re.sub(r"~\s*(?=[\d$])", "about ", line)
+    line = re.sub(r"(?<=\s)~(?=\s)", "about", line)
+    # A table header abbreviates ("Acc.: 88.9") and the colon already closes the label, so
+    # the period is a sentence boundary with nothing behind it.
+    line = re.sub(r"\.(?=\s*:)", "", line)
     # Catch-all. Any asterisk still here is unmatched or nested in a way the rules above did
     # not anticipate, and there is no reading of one that belongs in speech. Removing it
     # unconditionally is safer than another special case, because the failure mode of a
@@ -377,9 +829,23 @@ def clean_inline(line: str) -> str:
     # expecting a word character right after the semicolon skips every one of them.
     # Smart quotes are still smart at this point — they are folded to ASCII further down — so
     # the class has to list them, or the four clauses that open on a curly quote are missed.
+    # ...but not a semicolon inside parentheses. A citation group — "(Smith and colleagues,
+    # 2021; Zhou and Lee, 2019)" — is one parenthetical, and the rule below turned its
+    # separator into a full stop, so the voice closed a sentence inside the brackets and
+    # opened another it never closed. A comma is the separator a reader gives it.
+    line = re.sub(r"\(([^()]*)\)", lambda m: "(" + m.group(1).replace(";", ",") + ")", line)
     line = re.sub(r"\s*;\s+([\"'“‘]?)(\w)",
                   lambda m: ". " + m.group(1) + m.group(2).upper(), line)
     line = re.sub(r"\s*;\s*$", ".", line)
+    # Symbols and Greek letters typed as glyphs rather than as LaTeX commands. Outside a
+    # maths span they are silent — "d ≈ 0.42" was read as "d 0.42", which asserts equality
+    # rather than approximation. Before the hyphen rules, so "α-β" becomes "alpha-beta" and
+    # is then spaced like any other compound; a glyph is padded only where it would otherwise
+    # fuse into the word beside it.
+    for glyph, word in PROSE_SYMBOLS.items():
+        if glyph in line:
+            line = line.replace(glyph, word)
+    line = GREEK_RE.sub(_speak_greek, line)
     # A hyphen between two lower-case words is a compound modifier. It is not spoken, and
     # leaving it in makes the voice fuse the parts: `paid-but-unfulfilled` was rendered "paid
     # button fulfilled". Spacing it also improves page-word mapping, because the page's own
@@ -494,6 +960,7 @@ def render_tables(text: str) -> str:
 def convert(text: str, keep_code: bool = False, keep_captions: bool = True) -> str:
     text = strip_front_matter(text)
     text = drop_html_comments(text)
+    text = drop_display_math(text)
     text = resolve_shortcodes(text, keep_captions=keep_captions)
     # Before paragraph assembly, so table rows never reach the run-on buffer.
     text = render_tables(text)
@@ -512,6 +979,18 @@ def convert(text: str, keep_code: bool = False, keep_captions: bool = True) -> s
         line = raw.rstrip()
         if not line.strip():
             flush()
+            continue
+
+        # A footnote definition. Its marker is stripped from the sentence that cites it, so
+        # the note is spoken where it is written, named, and given its own paragraph gap —
+        # which is the audio equivalent of the reader's eye going to the foot of the page.
+        footnote = re.match(r"^\s*\[\^([^\]]+)\]:\s*(.*)$", line)
+        if footnote:
+            flush()
+            body = clean_inline(footnote.group(2))
+            if body:
+                label = f"Footnote {footnote.group(1)}."
+                paragraphs.append(f"{label} {body if ends_sentence(body) else body + '.'}")
             continue
 
         if line.lstrip().startswith("#"):

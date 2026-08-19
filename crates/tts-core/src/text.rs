@@ -97,10 +97,22 @@ pub fn segment(text: &str, max_chars: usize) -> Vec<Vec<String>> {
         let para = collapse_dots(&clean_text(para));
         let mut sentences: Vec<String> = Vec::new();
         let mut current = String::new();
-        for ch in para.chars() {
+        let chars: Vec<char> = para.chars().collect();
+        let mut i = 0;
+        while i < chars.len() {
+            let ch = chars[i];
             current.push(ch);
+            i += 1;
             if matches!(ch, '.' | '!' | '?') {
-                sentences.push(std::mem::take(&mut current));
+                // A closing quote or bracket belongs to the sentence the mark ends, so the
+                // boundary is looked for past it and the run is taken with it.
+                if let Some(end) = closer_end(&chars, i) {
+                    while i < end {
+                        current.push(chars[i]);
+                        i += 1;
+                    }
+                    sentences.push(std::mem::take(&mut current));
+                }
             }
         }
         if !current.trim().is_empty() {
@@ -136,6 +148,64 @@ pub fn segment(text: &str, max_chars: usize) -> Vec<Vec<String>> {
         }
     }
     out
+}
+
+/// Words whose period is part of the word, not the end of a sentence.
+///
+/// The narration prep expands these (`md-to-narration.py`, `ABBREVIATIONS`), so a book that
+/// goes through it never reaches here with one. Text handed straight to an engine does: an
+/// API caller's paragraph, a fixture, a probe. "Fig. 2" split there is a full stop's fall and
+/// pause inside a noun phrase, which is the same defect as the one `12.4` used to have and
+/// costs nothing to rule out.
+const ABBREVIATIONS: &[&str] = &[
+    "fig", "figs", "eq", "eqs", "tab", "sec", "secs", "ch", "chs", "no", "nos", "vol", "vols",
+    "pp", "p", "al", "cf", "eg", "ie", "dr", "mr", "mrs", "ms", "prof", "st", "approx", "ca",
+    "etc", "vs", "resp", "inc", "ltd", "co", "est", "jan", "feb", "mar", "apr", "jun", "jul",
+    "aug", "sep", "sept", "oct", "nov", "dec",
+];
+
+/// Is the word ending at `i` (exclusive) one of them?
+fn is_abbreviation(chars: &[char], i: usize) -> bool {
+    let start = chars[..i]
+        .iter()
+        .rposition(|c| !c.is_alphanumeric())
+        .map_or(0, |p| p + 1);
+    if start == i || i - start > 5 {
+        return false;
+    }
+    let word: String = chars[start..i].iter().collect::<String>().to_lowercase();
+    ABBREVIATIONS.contains(&word.as_str())
+}
+
+/// Where a sentence ending at `i` stops, if it ends there at all.
+///
+/// A bare `.` is not a boundary: "12.4" split into "12." and "4", the engine spoke them as
+/// two segments, and the listener heard "twelve" — pause — "four". Version strings, file
+/// names and initialisms fail the same way. A real boundary is followed by whitespace or
+/// the end of the paragraph, optionally past a closing quote or bracket — which the
+/// sentence keeps, so `Some(j)` is the index one past the last character of the sentence.
+fn closer_end(chars: &[char], i: usize) -> Option<usize> {
+    // "Fig. 2" and "et al. (2021)" — the period belongs to the word in front of it.
+    if i > 0 && chars[i - 1] == '.' && is_abbreviation(chars, i - 1) {
+        return None;
+    }
+    let mut j = i;
+    while matches!(chars.get(j), Some('"' | '\'' | ')' | ']' | '\u{201d}' | '\u{2019}')) {
+        j += 1;
+    }
+    match chars.get(j) {
+        None => Some(j),
+        // A lower-case word after the gap continues the sentence whatever the mark was. This
+        // is what catches the abbreviations the list above does not name — "e.g. the", "no.
+        // seven" — and English does not start a sentence in lower case, so nothing real is
+        // merged by it. An over-long merge is bounded by `split_long` in any case; a false
+        // boundary is not recoverable once it has been spoken.
+        Some(c) if c.is_whitespace() => match chars[j..].iter().find(|c| !c.is_whitespace()) {
+            Some(next) if next.is_lowercase() => None,
+            _ => Some(j),
+        },
+        Some(_) => None,
+    }
 }
 
 /// Collapse `..` and longer runs to a single period. The source text for the first
@@ -227,6 +297,39 @@ mod tests {
                 piece.len()
             );
         }
+    }
+
+    #[test]
+    fn an_abbreviation_is_not_a_sentence_boundary() {
+        let segs = segment("See Fig. 2 and Tab. 1. It holds.", 200);
+        assert_eq!(segs[0], vec!["See Fig. 2 and Tab. 1. It holds."]);
+        // The generic rule: whatever the mark, a lower-case continuation is one sentence.
+        let segs = segment("Shown in Sec. 4 e.g. the second run. Done.", 200);
+        assert_eq!(segs[0], vec!["Shown in Sec. 4 e.g. the second run. Done."]);
+    }
+
+    /// A capital after the gap is still a boundary — "10 MWh of demand at A. The model..."
+    /// is two sentences, and welding them was the cost of a rule that guessed the other way.
+    #[test]
+    fn a_capital_after_the_gap_still_breaks() {
+        let segs = segment("Demand at A. The model solves it.", 25);
+        assert_eq!(segs[0], vec!["Demand at A.", "The model solves it."]);
+    }
+
+    /// A decimal is one token. Splitting on its dot put "12." and "4" in separate segments
+    /// and the gap between them was audible.
+    #[test]
+    fn decimals_are_not_sentence_boundaries() {
+        let segs = segment("Latency rose to 12.4 seconds. Then it fell.", 200);
+        assert_eq!(segs[0], vec!["Latency rose to 12.4 seconds. Then it fell."]);
+        let segs = segment("Version 1.2.3 shipped.", 200);
+        assert_eq!(segs[0], vec!["Version 1.2.3 shipped."]);
+    }
+
+    #[test]
+    fn quoted_sentence_still_breaks() {
+        let segs = segment("He said \"go.\" She left.", 20);
+        assert_eq!(segs[0], vec!["He said \"go.\"", "She left."]);
     }
 
     #[test]
